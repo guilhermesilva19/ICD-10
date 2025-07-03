@@ -33,13 +33,18 @@ class AIValidator:
             candidate_codes=codes_formatted
         )
         
-        # Call OpenAI with structured output
+        # Call OpenAI with SUPER STRICT parameters for validation accuracy
         completion = self.client.chat.completions.create(
             model=self.model,
             messages=[
-                {"role": "system", "content": "You are an expert medical coder and auditor."},
+                {"role": "system", "content": "🚨 CRITICAL MEDICAL CODE VALIDATION 🚨 You are an expert medical coder and auditor. This validation affects patient care. Never guess - only validate with 100% certainty. Be extremely strict and conservative with confidence scores."},
                 {"role": "user", "content": prompt}
             ],
+            # SUPER STRICT PARAMETERS FOR MAXIMUM VALIDATION ACCURACY
+            temperature=0.0,           # Zero creativity - pure logic only
+            top_p=0.1,                # Extremely focused token selection
+            frequency_penalty=0.0,    # No penalty for repetition
+            presence_penalty=0.0,     # No penalty for detailed reasoning
             response_format={
                 "type": "json_schema",
                 "json_schema": {
