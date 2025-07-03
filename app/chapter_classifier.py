@@ -32,13 +32,18 @@ class ChapterClassifier:
             medical_text=medical_text
         )
         
-        # Call OpenAI with structured output
+        # Call OpenAI with SUPER STRICT parameters for maximum accuracy
         completion = self.client.chat.completions.create(
             model=self.model,
             messages=[
-                {"role": "system", "content": "You are an expert medical coder."},
+                {"role": "system", "content": "🚨 CRITICAL MEDICAL CODING TASK 🚨 You are an expert medical coder. Accuracy is LIFE-CRITICAL. Never guess or make assumptions. Only use the EXACT chapter names provided."},
                 {"role": "user", "content": prompt}
             ],
+            # SUPER STRICT PARAMETERS FOR MAXIMUM ACCURACY
+            temperature=0.0,           # Zero creativity - pure logic only
+            top_p=0.1,                # Extremely focused token selection
+            frequency_penalty=0.0,    # No penalty for repetition of exact names
+            presence_penalty=0.0,     # No penalty for using required format
             response_format={
                 "type": "json_schema",
                 "json_schema": {
