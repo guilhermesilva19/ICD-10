@@ -55,7 +55,6 @@ class SpreadsheetProcessor {
         this.uploadArea.addEventListener('dragover', (e) => this.handleDragOver(e));
         this.uploadArea.addEventListener('dragleave', (e) => this.handleDragLeave(e));
         this.uploadArea.addEventListener('drop', (e) => this.handleDrop(e));
-        this.uploadArea.addEventListener('click', () => this.selectFiles());
         
         // Control buttons
         this.processBtn.addEventListener('click', () => this.startProcessing());
