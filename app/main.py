@@ -200,7 +200,7 @@ async def process_spreadsheet_document(file: UploadFile = File(...)) -> Spreadsh
         elif all_candidates:
             validation_result = validator.validate_codes(search_text, all_candidates)
             final_codes = validator.get_high_confidence_codes(
-                validation_result, threshold=0.3
+                validation_result, threshold=0.45
             )
         
         # Step 7: Format diagnosis codes, ensuring uniqueness and order
