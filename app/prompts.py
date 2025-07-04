@@ -88,4 +88,69 @@ Consider:
 🚫 CRITICAL: Only recommend codes with confidence score > 0.5
 📊 Order by confidence score (highest first)
 🚨 When in doubt, use LOWER confidence scores - patient safety first!
+"""
+
+# New prompts for spreadsheet functionality
+TITLE_ENRICHMENT_PROMPT = """
+🎯 MEDICAL TITLE ENRICHMENT FOR VECTOR SEARCH
+
+You are a medical terminology expert. Your task is to enrich a medical document title with additional relevant keywords to improve vector search accuracy.
+
+CRITICAL REQUIREMENTS:
+🚫 NEVER change the original meaning
+🚫 NEVER add unrelated medical terms
+✅ Only add synonyms, related terms, and medical variations
+✅ Keep enrichment focused and relevant
+
+Original title: {title}
+
+TASK: Generate additional medical keywords that would help find relevant ICD-10-CM codes for this topic.
+
+GUIDELINES:
+- Add medical synonyms and alternative terms
+- Include related anatomical terms if applicable
+- Add common medical abbreviations if relevant
+- Include related condition variations
+- Focus on terms that would appear in ICD code descriptions
+
+EXAMPLE:
+Original: "Heart Attack"
+Enriched: "myocardial infarction, MI, cardiac arrest, coronary thrombosis, acute coronary syndrome"
+
+Provide your enriched keywords as a comma-separated list.
+Keep the enrichment focused and medically accurate.
+"""
+
+METADATA_GENERATION_PROMPT = """
+🩺 MEDICAL DOCUMENT METADATA GENERATION
+
+You are a medical documentation expert. Analyze the medical title/content and generate metadata.
+
+Title: {title}
+
+TASK: Generate the following metadata:
+
+1. GENDER APPLICABILITY:
+   - "Male" - if condition primarily affects males
+   - "Female" - if condition primarily affects females  
+   - "Both" - if condition affects both genders equally
+
+2. MEDICAL KEYWORDS:
+   - Extract key medical terms from the title/content
+   - Include relevant anatomical terms
+   - Add common symptoms or treatment terms
+   - Format as comma-separated list
+
+GUIDELINES:
+- Be accurate about gender applicability
+- Focus on clinically relevant keywords
+- Include both technical and common medical terms
+- Keep keywords focused and relevant
+
+EXAMPLE:
+Title: "Pregnancy Complications"
+Gender: Female
+Keywords: pregnancy, maternal health, prenatal care, obstetric complications, gestational disorders
+
+Provide accurate and clinically appropriate metadata.
 """ 

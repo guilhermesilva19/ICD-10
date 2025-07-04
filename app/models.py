@@ -40,4 +40,36 @@ class ValidationResponse(BaseModel):
     )
     overall_recommendation: str = Field(
         description="Summary recommendation about the best matching codes"
-    ) 
+    )
+
+
+# New models for spreadsheet functionality
+class TitleEnrichment(BaseModel):
+    """AI Title Enrichment Response"""
+    model_config = ConfigDict(extra='forbid')
+    
+    enriched_keywords: str = Field(description="Additional medical keywords for better vector search")
+    reasoning: str = Field(description="Brief explanation of enrichment")
+
+
+class DocumentMetadata(BaseModel):
+    """AI Document Metadata Generation Response"""
+    model_config = ConfigDict(extra='forbid')
+    
+    gender: str = Field(description="Gender applicability: Male, Female, or Both")
+    keywords: str = Field(description="Comma-separated medical keywords extracted from content")
+    reasoning: str = Field(description="Brief explanation of metadata generation")
+
+
+class SpreadsheetRow(BaseModel):
+    """Single row for spreadsheet output"""
+    filepath: str
+    title: str
+    gender: str
+    unique_name: str
+    keywords: str
+    diagnosis_codes: str
+    cpt_codes: str = ""  # Leave blank for now
+    language: str = "English"
+    source: str = "AI Medical Coding System"
+    document_type: str = "Patient Education" 
