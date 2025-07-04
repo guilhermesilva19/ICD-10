@@ -208,11 +208,10 @@ class SpreadsheetProcessor {
             this.createPlaceholderRow(file, index);
         });
 
-        // Fire all requests in parallel
-        const promises = this.files.map((file, index) => this.processFile(file, index));
-        
-        // Wait for all promises to settle (either resolve or reject)
-        await Promise.allSettled(promises);
+        // Process files sequentially
+        for (const [index, file] of this.files.entries()) {
+            await this.processFile(file, index);
+        }
 
         // Final UI updates after all processing is done
         this.isProcessing = false;
