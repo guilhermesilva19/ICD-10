@@ -6,6 +6,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 import os
 from typing import Dict, Any
+import asyncio
 
 from .document_reader import extract_text_from_file, validate_and_clean_text, extract_title_from_file
 from .chapter_classifier import ChapterClassifier
@@ -158,45 +159,70 @@ async def process_spreadsheet_document(file: UploadFile = File(...)) -> Spreadsh
         # Step 3: AI Metadata Generation
         metadata_result = title_enricher.generate_metadata(title)
         
-        # Step 4: Enhanced Chapter Classification (more chapters for better coverage)
+        # Step 4: Enhanced Chapter Classification
         chapter_classification = classifier.classify_chapters(search_text)
-        
-        # Get more chapters with lower threshold for broader coverage
         target_chapters = classifier.get_high_probability_chapters(
             chapter_classification, threshold=0.3
         )
         
-        # Step 5: Enhanced Vector search (more results per chapter)
+        # Step 5: Vector search to get candidates for each chapter
+        all_candidates = []
+        search_results = {}
         if target_chapters:
             search_results = vectorstore.search_codes_by_chapter(
-                search_text, target_chapters, top_k=30  # More results per chapter
+                search_text, target_chapters, top_k=30
             )
-            
-            # Flatten results for validation
-            all_candidates = []
-            for chapter_results in search_results.values():
-                all_candidates.extend(chapter_results)
         else:
-            # Fallback: search all chapters with more results
+            # Fallback if no chapters are identified
             all_candidates = vectorstore.search_all_codes(search_text, top_k=150)
+
+        # Step 6: AI Validation in parallel for each chapter
+        final_codes = []
+        if search_results:
+            # Create a validation task for each chapter's results
+            validation_tasks = [
+                validator.validate_codes_async(search_text, candidates)
+                for candidates in search_results.values() if candidates
+            ]
+            
+            if validation_tasks:
+                # Run all validation tasks concurrently
+                validation_results = await asyncio.gather(*validation_tasks)
+                
+                # Collect high-confidence codes from all results
+                for result in validation_results:
+                    high_confidence_codes = validator.get_high_confidence_codes(
+                        result, threshold=0.3
+                    )
+                    final_codes.extend(high_confidence_codes)
         
-        # Step 6: AI Validation with lower threshold for more codes
-        diagnosis_codes = ""
-        if all_candidates:
+        # Handle the fallback case using the original synchronous method
+        elif all_candidates:
             validation_result = validator.validate_codes(search_text, all_candidates)
-            
-            # Get codes with lower confidence threshold for broader coverage
             final_codes = validator.get_high_confidence_codes(
-                validation_result, threshold=0.3  # Lower threshold for more codes
+                validation_result, threshold=0.3
             )
-            
-            # Format diagnosis codes as comma-separated string
-            diagnosis_codes = ", ".join([code.icd_code for code in final_codes])
         
-        # Step 7: Generate unique name (title with underscores)
+        # Step 7: Format diagnosis codes, ensuring uniqueness and order
+        # Use a dictionary to get unique codes, preserving the one with the highest score
+        diagnosis_codes_map = {}
+        for code in final_codes:
+            if code.icd_code not in diagnosis_codes_map or \
+               code.confidence_score > diagnosis_codes_map[code.icd_code].confidence_score:
+                diagnosis_codes_map[code.icd_code] = code
+        
+        unique_final_codes = sorted(
+            diagnosis_codes_map.values(), 
+            key=lambda x: x.confidence_score, 
+            reverse=True
+        )
+        
+        diagnosis_codes = ", ".join([code.icd_code for code in unique_final_codes])
+        
+        # Step 8: Generate unique name (title with underscores)
         unique_name = title.replace(" ", "_").replace(",", "").replace("(", "").replace(")", "")
         
-        # Step 8: Return spreadsheet row
+        # Step 9: Return spreadsheet row
         return SpreadsheetRow(
             filepath=file.filename,
             title=title,
