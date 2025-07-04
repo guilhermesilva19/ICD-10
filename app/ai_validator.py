@@ -70,12 +70,13 @@ class AIValidator:
         
         for code_data in candidate_codes:
             code_text = f"""
-Code: {code_data['icd_code']}
-Description: {code_data['description']}
-Chapter: {code_data.get('chapter', 'Unknown')}
-Vector Similarity Score: {code_data['score']:.3f}
-Rich Context: {code_data.get('rich_text', '')[:200]}...
----"""
+            Code: {code_data['icd_code']}
+            Description: {code_data['description']}
+            Chapter: {code_data.get('chapter', 'Unknown')}
+            Rich Context: {code_data.get('rich_text', '')[:200]}...
+            Section: {code_data.get('section', '')}
+            
+            ---"""
             formatted.append(code_text)
         
         return "\n".join(formatted)
