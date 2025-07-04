@@ -24,8 +24,8 @@ class SpreadsheetProcessor {
         this.exportBtn = document.getElementById('exportBtn');
         this.newBatchBtn = document.getElementById('newBatchBtn');
         
-        // Progress elements
-        this.progressSection = document.getElementById('progressSection');
+        // Progress elements (now integrated)
+        this.progressContainer = document.getElementById('progressContainer');
         this.progressBar = document.getElementById('progressBar');
         this.progressStats = document.getElementById('progressStats');
         this.currentProcessing = document.getElementById('currentProcessing');
@@ -188,9 +188,9 @@ class SpreadsheetProcessor {
         this.currentFileIndex = 0;
         this.completedFiles = 0; // For tracking parallel progress
 
-        // Show progress section
-        this.progressSection.style.display = 'block';
-        this.resultsSection.style.display = 'none';
+        // Show the main results panel with the progress container inside it
+        this.resultsSection.style.display = 'block';
+        this.progressContainer.style.display = 'block';
 
         // Reset progress and stats
         this.updateProgress(0, this.files.length);
@@ -214,8 +214,7 @@ class SpreadsheetProcessor {
         // Wait for all promises to settle (either resolve or reject)
         await Promise.allSettled(promises);
 
-        // Show final results
-        this.showResults();
+        // Final UI updates after all processing is done
         this.isProcessing = false;
         this.updateProcessButton();
     }
@@ -282,6 +281,7 @@ class SpreadsheetProcessor {
             this.completedFiles++;
             this.updateProgress(this.completedFiles, this.files.length);
             this.progressBar.style.width = `${(this.completedFiles / this.files.length) * 100}%`;
+            this.updateStats(); // Update stats in real-time
         }
     }
 
@@ -306,6 +306,22 @@ class SpreadsheetProcessor {
             <td class="col-language">${result.language || 'N/A'}</td>
             <td>${statusIcon} ${result.status}</td>
         `;
+    }
+
+    updateStats() {
+        const successful = this.results.filter(r => r.status === 'completed').length;
+        const errors = this.results.filter(r => r.status === 'error').length;
+        const totalCodes = this.results.reduce((sum, r) => {
+            if (r.diagnosis_codes) {
+                return sum + r.diagnosis_codes.split(',').filter(code => code.trim()).length;
+            }
+            return sum;
+        }, 0);
+
+        this.totalFiles.textContent = this.files.length; // Show total files to be processed
+        this.successCount.textContent = successful;
+        this.errorCount.textContent = errors;
+        this.totalCodes.textContent = totalCodes;
     }
 
     showCurrentProcessing(filename) {
@@ -355,26 +371,8 @@ class SpreadsheetProcessor {
     }
 
     showResults() {
-        this.progressSection.style.display = 'none';
-        this.resultsSection.style.display = 'block';
-
-        // Update statistics
-        const successful = this.results.filter(r => r.status === 'completed').length;
-        const errors = this.results.filter(r => r.status === 'error').length;
-        const totalCodes = this.results.reduce((sum, r) => {
-            if (r.diagnosis_codes) {
-                return sum + r.diagnosis_codes.split(',').filter(code => code.trim()).length;
-            }
-            return sum;
-        }, 0);
-
-        this.totalFiles.textContent = this.results.length;
-        this.successCount.textContent = successful;
-        this.errorCount.textContent = errors;
-        this.totalCodes.textContent = totalCodes;
-
-        // Show success notification
-        this.showNotification(`Processing completed! ${successful} successful, ${errors} errors`, 'success');
+        // This function is no longer needed as results are shown in real-time.
+        // Kept empty to avoid breaking any potential calls, but logic is moved.
     }
 
     clearAll() {
@@ -382,8 +380,9 @@ class SpreadsheetProcessor {
         this.results = [];
         this.updateFileList();
         this.updateProcessButton();
-        this.progressSection.style.display = 'none';
-        this.resultsSection.style.display = 'none';
+        this.resultsSection.style.display = 'none'; // Hide the main panel
+        this.progressContainer.style.display = 'none'; // Hide progress
+        this.updateStats(); // Reset stats to 0
         this.showNotification('All files cleared', 'info');
     }
 

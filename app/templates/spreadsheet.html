@@ -533,21 +533,7 @@
             <div id="fileList" style="margin-top: 20px;"></div>
         </div>
 
-        <!-- Progress Section -->
-        <div class="progress-section" id="progressSection">
-            <div class="progress-header">
-                <h3><i class="fas fa-cogs"></i> Processing Documents</h3>
-                <div id="progressStats">0 / 0 completed</div>
-            </div>
-            
-            <div class="progress-bar-container">
-                <div class="progress-bar" id="progressBar"></div>
-            </div>
-            
-            <div id="currentProcessing"></div>
-        </div>
-
-        <!-- Results Section -->
+        <!-- Results Section (Now includes Progress) -->
         <div class="results-section" id="resultsSection">
             <div class="results-header">
                 <h3><i class="fas fa-table"></i> Processing Results</h3>
@@ -579,6 +565,18 @@
                         <i class="fas fa-plus"></i> New Batch
                     </button>
                 </div>
+            </div>
+
+            <!-- Integrated Progress Section -->
+            <div id="progressContainer" style="margin: 20px 0; display: none;">
+                <div class="progress-header" style="margin-bottom: 10px;">
+                    <h4 style="color: var(--gray-800);"><i class="fas fa-cogs"></i> Processing Status</h4>
+                    <div id="progressStats" style="font-weight: 600;">0 / 0 completed</div>
+                </div>
+                <div class="progress-bar-container">
+                    <div class="progress-bar" id="progressBar"></div>
+                </div>
+                <div id="currentProcessing" style="margin-top: 10px;"></div>
             </div>
 
             <div class="table-container">
