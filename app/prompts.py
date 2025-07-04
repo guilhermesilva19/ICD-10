@@ -140,6 +140,7 @@ TASK: Generate the following metadata:
    - Include relevant anatomical terms
    - Add common symptoms or treatment terms
    - Format as comma-separated list
+   - Never include madeup words all keywords  mest be from the document
 
 GUIDELINES:
 - Be accurate about gender applicability
