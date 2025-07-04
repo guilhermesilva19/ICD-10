@@ -48,7 +48,7 @@ class AIValidator:
                     "schema": ValidationResponse.model_json_schema()
                 }
             },
-            temperature=0.0,
+            temperature=0.2,
             top_p=0.1
         )
         
@@ -87,7 +87,7 @@ class AIValidator:
                         "schema": ValidationResponse.model_json_schema()
                     }
                 },
-                temperature=0.0,
+                temperature=0.2,
                 top_p=0.1
             )
             result_json = json.loads(completion.choices[0].message.content)

@@ -40,7 +40,7 @@ class ChapterClassifier:
                 {"role": "user", "content": prompt}
             ],
             # SUPER STRICT PARAMETERS FOR MAXIMUM ACCURACY
-            temperature=0.0,           # Zero creativity - pure logic only
+            temperature=0.1,           # Zero creativity - pure logic only
             top_p=0.1,                # Extremely focused token selection
             frequency_penalty=0.0,    # No penalty for repetition of exact names
             presence_penalty=0.0,     # No penalty for using required format
