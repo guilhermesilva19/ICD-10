@@ -169,7 +169,7 @@ async def process_spreadsheet_document(file: UploadFile = File(...)) -> Spreadsh
         # Step 5: Enhanced Vector search (more results per chapter)
         if target_chapters:
             search_results = vectorstore.search_codes_by_chapter(
-                search_text, target_chapters, top_k=20  # More results per chapter
+                search_text, target_chapters, top_k=80  # More results per chapter
             )
             
             # Flatten results for validation
