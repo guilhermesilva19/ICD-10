@@ -1,7 +1,7 @@
 """Prompt templates for AI medical coding"""
 
 
-# ===== NEW: Clean Two-Step Process Prompts =====
+# ===== Clean Two-Step Process Prompts =====
 INITIAL_SELECTION_PROMPT = """
 🩺 MEDICAL CODE SELECTION
 
@@ -52,61 +52,10 @@ DELIVERABLE: Only clinically relevant codes with enhanced descriptions and confi
 """
 
 
-# ===== KEEP: Legacy validation prompt for /analyze endpoint =====
-LEGACY_VALIDATION_PROMPT = """
-🚨🚨🚨 CRITICAL CODE VALIDATION - COMPREHENSIVE RELATED CODES 🚨🚨🚨
-
-You are an expert medical coder specializing in ICD-10-CM code validation. Your task is to find STRONGLY RELATED ICD codes for the given medical documentation.
-
-🎯 MISSION: Find approximately 30 STRONGLY RELATED codes with confidence scores proportional to their relatedness
-🚫 NEVER GUESS OR ASSUME ANYTHING
-
-Original medical text:
-{medical_text}
-
-Please evaluate each of the following ICD codes for RELATEDNESS and appropriateness:
-
-{candidate_codes}
-
-🔍 RELATEDNESS CRITERIA - BE COMPREHENSIVE BUT ACCURATE:
-
-CONFIDENCE SCORING :
-- 0.9-1.0: PERFECT MATCH - Exact condition described
-- 0.8-0.9: VERY STRONG RELATION - Directly related condition/symptom
-- 0.7-0.8: STRONG RELATION - Same anatomical system or related disorder
-- 0.6-0.7: GOOD RELATION - Related condition family or differential diagnosis
-- 0.5-0.6: MODERATE RELATION - Same chapter/category, related symptoms
-- 0.4-0.5: WEAK RELATION - Tangentially related, same organ system
-- 0.3-0.4: MINIMAL RELATION - Distant connection but still relevant
-- 0.0-0.3: NOT RELATED - No meaningful clinical connection
-
-🎯 TARGET OUTPUT: Return approximately 30 codes, including:
-- Direct matches (high confidence 0.8-1.0)
-- Related conditions (medium confidence 0.5-0.8) 
-- Differential diagnoses (lower confidence 0.4-0.6)
-- Same anatomical system codes (0.3-0.5)
-
-For each code, provide:
-1. The ICD-10-CM code
-2. The official description  
-3. A confidence score (0.0 to 1.0) - proportional to relatedness
-4. Clear reasoning explaining the clinical relationship
-5. Specific evidence or connection to the medical text
-
-Consider ALL types of clinical relationships:
-- Primary conditions and complications
-- Related symptoms and manifestations
-- Differential diagnoses to consider
-- Same anatomical system disorders
-- Associated conditions and comorbidities
-- Preventive care related codes
-
-📊 Order by confidence score (highest first)
-🩺 Focus on clinical utility - codes that would be relevant for medical decision making
-"""
 
 
-# ===== KEEP: Spreadsheet functionality prompts =====
+
+# ===== Spreadsheet functionality prompts =====
 TITLE_ENRICHMENT_PROMPT = """
 🎯 MEDICAL TITLE ENRICHMENT FOR VECTOR SEARCH
 
@@ -140,11 +89,12 @@ Keep the enrichment focused and medically accurate.
 METADATA_GENERATION_PROMPT = """
 🩺 MEDICAL DOCUMENT METADATA GENERATION
 
-You are a medical documentation expert. Analyze the medical title/content and generate metadata.
+You are a medical documentation expert. Analyze the medical title and document content to generate comprehensive metadata.
 
 Title: {title}
+Document Content: {content}
 
-TASK: Generate the following metadata:
+TASK: Generate the following metadata by analyzing BOTH the title and full document content:
 
 1. GENDER APPLICABILITY:
    - "Male" - if condition primarily affects males
@@ -152,24 +102,25 @@ TASK: Generate the following metadata:
    - "Both" - if condition affects both genders equally
 
 2. MEDICAL KEYWORDS:
-   - Extract key medical terms from the title/content
+   - Extract key medical terms from the content
    - Include relevant anatomical terms
-   - Add common symptoms or treatment terms
+   - Add symptoms, treatments, procedures
+   - Include diagnostic terms and medical conditions
+   - Include other relevant  medical keywords and synonyms
+   - Add relevant medical specialties and care areas
    - Format as comma-separated list
    - Include synonyms and related terms
+   - Focus on terms that would help in medical coding and search
 
 GUIDELINES:
-- Be accurate about gender applicability
-- Focus on clinically relevant keywords
-- Include both technical and common medical terms
-- Keep keywords focused and 
-- include synonyms and related terms
-- you should atleast provide 15 to 20 keywords
+- Analyze the FULL document content, not just the title
+- Be accurate about gender applicability based on content analysis
+- Focus on clinically relevant keywords from the entire document
+- Include both technical and common medical terms found in content and other relavant keywords too that might not be mentioned int he document
+- Extract procedure names, medication categories, and treatment approaches
+- Include anatomical terms and body systems mentioned
+- You should provide at least 15-35 comprehensive keywords
+- Prioritize terms that appear in or relate to the document content
 
-EXAMPLE:
-Title: "Pregnancy Complications"
-Gender: Female
-Keywords: pregnancy, maternal health, prenatal care, obstetric complications, gestational disorders ....
-
-Provide accurate and clinically appropriate metadata.
+Provide accurate and clinically appropriate metadata based on the complete document analysis.
 """

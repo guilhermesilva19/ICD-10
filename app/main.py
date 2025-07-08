@@ -11,11 +11,10 @@ from fastapi import FastAPI, HTTPException, File, UploadFile, Request
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
-import asyncio
 from typing import Dict, Any, List
 
 from .models import SpreadsheetRow, RefinedCodeValidation
-from .document_reader import extract_title_from_file
+from .document_reader import extract_title_from_file, extract_text_from_file
 from .title_enricher import TitleEnricher
 from .ai_validator import AIValidator
 from .vectorstore import VectorStore
@@ -43,11 +42,10 @@ async def spreadsheet_interface(request: Request):
 @app.post("/analyze")
 async def analyze_document(file: UploadFile = File(...)) -> Dict[str, Any]:
     """
-    LEGACY ENDPOINT: Original single document analysis
-    Maintains backward compatibility with existing functionality
+    Same two-step AI process as spreadsheet but simplified for single documents
     """
     try:
-        # Extract content and title
+        # Step 1: Extract title
         file_content = await file.read()
         title = extract_title_from_file(file_content, file.filename)
         
@@ -57,28 +55,63 @@ async def analyze_document(file: UploadFile = File(...)) -> Dict[str, Any]:
                 detail=f"Could not extract title from file: {file.filename}"
             )
         
-        # AI enrichment for better search
+        # Step 2: AI Title Enrichment
         enrichment_result = title_enricher.enrich_title(title)
         search_text = f"{title} {enrichment_result.enriched_keywords}"
         
-        # Direct vector search (no chapter limitations)
-        candidates = vectorstore.search_all_codes(search_text, top_k=200)
+        # Step 3: Direct Vector Search (No Chapter Limitations!)
+        all_candidates = vectorstore.search_all_codes(search_text, top_k=450)
         
-        # Legacy validation for backward compatibility
-        validation_result = validator.validate_codes(search_text, candidates)
-        high_confidence_codes = validator.get_high_confidence_codes(
-            validation_result, threshold=0.4
+        if not all_candidates:
+            raise HTTPException(
+                status_code=404,
+                detail="No relevant codes found"
+            )
+        
+        # Step 4: Two-Step AI Validation Process
+        
+        # Step 4a: Initial Selection (~50 codes)
+        selection_result = await validator.initial_selection(search_text, all_candidates)
+        
+        if not selection_result.selected_codes:
+            raise HTTPException(
+                status_code=404,
+                detail="No relevant codes identified"
+            )
+        
+        # Step 4b: Clinical Refinement (enhanced descriptions + confidence)
+        refinement_result = await validator.clinical_refinement(
+            search_text, 
+            selection_result.selected_codes, 
+            all_candidates
         )
         
-        # Format response
-        diagnosis_codes = [code.icd_code for code in high_confidence_codes]
+        if not refinement_result.refined_codes:
+            raise HTTPException(
+                status_code=404,
+                detail="No codes validated after clinical review"
+            )
+        
+        # Step 5: Format Clean Response
+        diagnosis_codes = [code.icd_code for code in refinement_result.refined_codes]
+        
+        # Enhanced code details
+        code_details = []
+        for code in refinement_result.refined_codes:
+            confidence_pct = int(code.confidence_score * 100)
+            code_details.append({
+                "code": code.icd_code,
+                "enhanced_description": code.enhanced_description,
+                "confidence": f"{confidence_pct}%"
+            })
         
         return {
             "title": title,
             "enriched_keywords": enrichment_result.enriched_keywords,
             "diagnosis_codes": diagnosis_codes,
-            "total_codes_found": len(high_confidence_codes),
-            "validation_summary": validation_result.overall_recommendation
+            "total_codes_found": len(refinement_result.refined_codes),
+            "code_details": code_details,
+            "clinical_summary": refinement_result.clinical_summary
         }
         
     except ValueError as e:
@@ -110,14 +143,17 @@ async def process_spreadsheet_document(file: UploadFile = File(...)) -> Spreadsh
                 detail=f"Could not extract title from file: {file.filename}"
             )
         
-        # Step 2: AI Title Enrichment for better vector search
+        # Step 2: Extract full document content for comprehensive keyword analysis
+        full_content = extract_text_from_file(file_content, file.filename)
+        
+        # Step 3: AI Title Enrichment for better vector search
         enrichment_result = title_enricher.enrich_title(title)
         search_text = f"{title} {enrichment_result.enriched_keywords}"
         
-        # Step 3: AI Metadata Generation
-        metadata_result = title_enricher.generate_metadata(title)
+        # Step 4: AI Metadata Generation with full document content
+        metadata_result = title_enricher.generate_metadata(title, full_content)
         
-        # Step 4: Direct Vector Search (No Chapter Limitations!)
+        # Step 5: Vector Search 
         # Search all codes directly - let AI decide what's relevant
         all_candidates = vectorstore.search_all_codes(search_text, top_k=450)
         
@@ -127,9 +163,9 @@ async def process_spreadsheet_document(file: UploadFile = File(...)) -> Spreadsh
                 detail="No relevant codes found in vector search"
             )
         
-        # Step 5: Two-Step AI Validation Process
+        # Step 6: Two-Step AI Validation Process
         
-        # Step 5a: Initial Selection (~50 codes)
+        # Step 6a: Initial Selection (~50 codes)
         selection_result = await validator.initial_selection(search_text, all_candidates)
         
         if not selection_result.selected_codes:
@@ -138,7 +174,7 @@ async def process_spreadsheet_document(file: UploadFile = File(...)) -> Spreadsh
                 detail="No codes selected in initial selection step"
             )
         
-        # Step 5b: Clinical Refinement (enhanced descriptions + confidence)
+        # Step 6b: Clinical Refinement (enhanced descriptions + confidence)
         refinement_result = await validator.clinical_refinement(
             search_text, 
             selection_result.selected_codes, 
@@ -151,7 +187,7 @@ async def process_spreadsheet_document(file: UploadFile = File(...)) -> Spreadsh
                 detail="No codes validated in clinical refinement step"
             )
         
-        # Step 6: Format Results for Spreadsheet Output
+        # Step 7: Format Results for Spreadsheet Output
         root_codes = extract_root_codes_simple(refinement_result.refined_codes)
         hierarchy_codes = extract_hierarchy_codes_simple(refinement_result.refined_codes)
         code_descriptions = format_enhanced_descriptions(refinement_result.refined_codes)
@@ -160,7 +196,7 @@ async def process_spreadsheet_document(file: UploadFile = File(...)) -> Spreadsh
         # Generate unique name
         unique_name = title.replace(" ", "_").replace(",", "").replace("(", "").replace(")", "")
         
-        # Step 7: Return Clean Spreadsheet Row
+        # Step 8: Return Clean Spreadsheet Row
         return SpreadsheetRow(
             filepath=file.filename,
             title=title,

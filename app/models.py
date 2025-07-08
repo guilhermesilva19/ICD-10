@@ -2,30 +2,6 @@ from pydantic import BaseModel, Field, ConfigDict
 from typing import List
 
 
-# ==== Code Validation (for backward compatibility) =====
-class CodeValidation(BaseModel):
-    """Single ICD code validation result"""
-    model_config = ConfigDict(extra='forbid')
-    
-    icd_code: str = Field(description="The ICD-10-CM code")
-    description: str = Field(description="Official code description")
-    confidence_score: float = Field(description="Confidence score from 0.0 to 1.0")
-    reasoning: str = Field(description="Explanation of why this code matches or doesn't match")
-
-
-class ValidationResponse(BaseModel):
-    """AI Validation Response for ICD codes - KEEP for /analyze endpoint"""
-    model_config = ConfigDict(extra='forbid')
-    
-    validated_codes: List[CodeValidation] = Field(
-        description="List of up to 30 validated ICD codes with confidence scores, ordered by confidence",
-        max_items=30
-    )
-    overall_recommendation: str = Field(
-        description="Summary recommendation about the best matching codes"
-    )
-
-
 class InitialSelectionResponse(BaseModel):
     """Step 1: Simple code selection response"""
     model_config = ConfigDict(extra='forbid')
@@ -58,7 +34,6 @@ class ClinicalRefinementResponse(BaseModel):
     )
 
 
-# == Spreadsheet functionality models =====
 class TitleEnrichment(BaseModel):
     """AI Title Enrichment Response"""
     model_config = ConfigDict(extra='forbid')

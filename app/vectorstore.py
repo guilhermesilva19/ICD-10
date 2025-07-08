@@ -57,28 +57,26 @@ class VectorStore:
         print(f"🔍 Vector search found {len(formatted_results)} codes for two-step AI processing")
         return formatted_results
     
-    # ===== LEGACY: Keep chapter search for backward compatibility (/analyze endpoint) =====
-    
-    def search_codes_by_chapter(self, medical_text: str, chapter_names: list, 
-                               top_k: int = 50) -> dict:
+    # ===== CHAPTER-SPECIFIC SEARCH METHODS =====
+
+    def search_chapter_codes(self, search_text: str, chapter_list: list, top_k: int = 100) -> list:
         """
-        LEGACY: Search for ICD codes in specific chapters using vector similarity
-        Kept for backward compatibility with /analyze endpoint
+        Search for ICD codes in specific chapters using vector similarity
         
         Args:
-            medical_text: The medical text to search for
-            chapter_names: List of EXACT chapter names to filter by
-            top_k: Number of results to return per chapter
+            search_text: Text to search for
+            chapter_list: List of chapter names to search within
+            top_k: Maximum number of results to return
             
         Returns:
-            dict: Chapter-wise search results
+            List of matching codes with metadata
         """
         # Create embedding for the medical text
-        query_embedding = self._create_embedding(medical_text)
+        query_embedding = self._create_embedding(search_text)
         
-        results = {}
+        results = []
         
-        for chapter_name in chapter_names:
+        for chapter_name in chapter_list:
             # Use the EXACT chapter name for filtering
             filter_dict = {
                 "chapter": {"$eq": chapter_name}
@@ -104,6 +102,6 @@ class VectorStore:
                     'section': match.metadata.get('section', '')
                 })
             
-            results[chapter_name] = formatted_results
+            results.extend(formatted_results)
         
         return results 
