@@ -270,6 +270,179 @@ class TableRenderer {
 }
 
 class ExportManager {
+    static parseICDCodes(row) {
+        const codes = [];
+        
+        // Parse hierarchy codes (main source of truth)
+        const hierarchyCodes = row.icd_code_hierarchy ? row.icd_code_hierarchy.split(',').map(c => c.trim()) : [];
+        
+        // Parse descriptions (format: "CODE: Description, CODE: Description")
+        const descriptions = {};
+        if (row.details_description) {
+            const descMatches = row.details_description.match(/([A-Z]\d+(?:\.\d+)?)\s*:\s*([^,]+(?:,(?![A-Z]\d+)[^,]*)*)/g);
+            if (descMatches) {
+                descMatches.forEach(match => {
+                    const [, code, desc] = match.match(/([A-Z]\d+(?:\.\d+)?)\s*:\s*(.+)/);
+                    descriptions[code.trim()] = desc.trim();
+                });
+            }
+        }
+        
+        // Parse confidence scores (format: "CODE: XX%, CODE: XX%")
+        const scores = {};
+        if (row.details_score) {
+            const scoreMatches = row.details_score.match(/([A-Z]\d+(?:\.\d+)?)\s*:\s*(\d+%)/g);
+            if (scoreMatches) {
+                scoreMatches.forEach(match => {
+                    const [, code, score] = match.match(/([A-Z]\d+(?:\.\d+)?)\s*:\s*(\d+%)/);
+                    scores[code.trim()] = score.trim();
+                });
+            }
+        }
+        
+        // Combine all data for each code
+        hierarchyCodes.forEach(code => {
+            if (code) {
+                const rootCode = code.substring(0, 3); // First 3 characters
+                const confidenceNum = parseInt(scores[code]?.replace('%', '') || '0');
+                
+                codes.push({
+                    document_path: row.filepath,
+                    document_title: row.title,
+                    document_gender: row.gender,
+                    document_keywords: row.keywords,
+                    icd_code: code,
+                    root_code: rootCode,
+                    code_chapter: ExportManager.getICDChapter(rootCode),
+                    enhanced_description: descriptions[code] || 'Description not available',
+                    confidence_score: scores[code] || '0%',
+                    confidence_numeric: confidenceNum,
+                    confidence_level: ExportManager.getConfidenceLevel(confidenceNum),
+                    document_language: row.language,
+                    document_status: row.status
+                });
+            }
+        });
+        
+        return codes;
+    }
+
+    // 🏷️ ICD Chapter Mapping
+    static getICDChapter(rootCode) {
+        const chapters = {
+            'A': 'Infectious Diseases', 'B': 'Infectious Diseases',
+            'C': 'Neoplasms', 'D0': 'Neoplasms', 'D1': 'Neoplasms', 'D2': 'Neoplasms', 'D3': 'Neoplasms', 'D4': 'Neoplasms',
+            'D5': 'Blood Disorders', 'D6': 'Blood Disorders', 'D7': 'Blood Disorders', 'D8': 'Blood Disorders',
+            'E': 'Endocrine Disorders',
+            'F': 'Mental Disorders',
+            'G': 'Nervous System',
+            'H0': 'Eye Disorders', 'H1': 'Eye Disorders', 'H2': 'Eye Disorders', 'H5': 'Eye Disorders',
+            'H6': 'Ear Disorders', 'H9': 'Ear Disorders',
+            'I': 'Circulatory System',
+            'J': 'Respiratory System',
+            'K': 'Digestive System',
+            'L': 'Skin Disorders',
+            'M': 'Musculoskeletal System',
+            'N': 'Genitourinary System',
+            'O': 'Pregnancy/Childbirth',
+            'P': 'Perinatal Conditions',
+            'Q': 'Congenital Malformations',
+            'R': 'Symptoms/Signs',
+            'S': 'Injuries', 'T': 'Injuries',
+            'V': 'External Causes', 'W': 'External Causes', 'X': 'External Causes', 'Y': 'External Causes',
+            'Z': 'Health Services'
+        };
+        
+        return chapters[rootCode] || chapters[rootCode.substring(0, 2)] || chapters[rootCode.substring(0, 1)] || 'Other';
+    }
+
+    // 🎯 Confidence Level Classification
+    static getConfidenceLevel(score) {
+        if (score >= 90) return 'High';
+        if (score >= 70) return 'Medium';
+        return 'Low';
+    }
+
+    // 📊 ANALYTICS GENERATOR - Creates business intelligence data
+    static generateAnalytics(allCodes) {
+        const analytics = {
+            rootCodeStats: [],
+            confidenceDistribution: [],
+            topSpecificCodes: [],
+            documentSummary: []
+        };
+
+        // Root Code Statistics
+        const rootStats = {};
+        const documentsByRoot = {};
+        
+        allCodes.forEach(code => {
+            if (!rootStats[code.root_code]) {
+                rootStats[code.root_code] = {
+                    root_code: code.root_code,
+                    category_name: code.code_chapter,
+                    code_count: 0,
+                    total_confidence: 0,
+                    documents: new Set()
+                };
+            }
+            
+            rootStats[code.root_code].code_count++;
+            rootStats[code.root_code].total_confidence += code.confidence_numeric;
+            rootStats[code.root_code].documents.add(code.document_path);
+        });
+
+        // Convert to array and calculate averages
+        Object.values(rootStats).forEach(stat => {
+            analytics.rootCodeStats.push({
+                root_code: stat.root_code,
+                category_name: stat.category_name,
+                document_count: stat.documents.size,
+                code_count: stat.code_count,
+                avg_confidence: Math.round(stat.total_confidence / stat.code_count) + '%'
+            });
+        });
+
+        // Confidence Distribution
+        const confBuckets = { high: 0, medium: 0, low: 0 };
+        allCodes.forEach(code => {
+            const level = code.confidence_level.toLowerCase();
+            confBuckets[level] = (confBuckets[level] || 0) + 1;
+        });
+
+        const total = allCodes.length;
+        analytics.confidenceDistribution = [
+            { confidence_range: '90-100% (High)', code_count: confBuckets.high, percentage: Math.round((confBuckets.high / total) * 100) + '%' },
+            { confidence_range: '70-89% (Medium)', code_count: confBuckets.medium, percentage: Math.round((confBuckets.medium / total) * 100) + '%' },
+            { confidence_range: 'Below 70% (Low)', code_count: confBuckets.low, percentage: Math.round((confBuckets.low / total) * 100) + '%' }
+        ];
+
+        // Top Specific Codes
+        const codeFreq = {};
+        allCodes.forEach(code => {
+            if (!codeFreq[code.icd_code]) {
+                codeFreq[code.icd_code] = {
+                    icd_code: code.icd_code,
+                    description: code.enhanced_description.substring(0, 60) + '...',
+                    frequency: 0,
+                    total_confidence: 0
+                };
+            }
+            codeFreq[code.icd_code].frequency++;
+            codeFreq[code.icd_code].total_confidence += code.confidence_numeric;
+        });
+
+        analytics.topSpecificCodes = Object.values(codeFreq)
+            .map(code => ({
+                ...code,
+                avg_confidence: Math.round(code.total_confidence / code.frequency) + '%'
+            }))
+            .sort((a, b) => b.frequency - a.frequency)
+            .slice(0, 15); // Top 15
+
+        return analytics;
+    }
+
     static convertToCSV(data) {
         if (data.length === 0) return '';
 
@@ -322,26 +495,176 @@ class ExportManager {
     }
 
     static exportAsExcel(data) {
-        const workbook = XLSX.utils.book_new();
-        const worksheet = XLSX.utils.json_to_sheet(data);
         
-        const colWidths = [
-            { wch: 30 }, // filepath
-            { wch: 40 }, // title
-            { wch: 10 }, // gender
-            { wch: 30 }, // unique_name
-            { wch: 50 }, // keywords
-            { wch: 15 }, // icd_code_root
-            { wch: 30 }, // icd_code_hierarchy
-            { wch: 60 }, // details_description
-            { wch: 30 }, // details_score
-            { wch: 10 }, // language
-            { wch: 15 }  // status
+        // 🎯 STEP 1: Parse all data into individual codes
+        const allCodes = [];
+        data.forEach(row => {
+            const parsedCodes = ExportManager.parseICDCodes(row);
+            allCodes.push(...parsedCodes);
+        });
+        
+        console.log(`✨ Parsed ${allCodes.length} individual ICD codes from ${data.length} documents`);
+        
+        // 🎯 STEP 2: Generate Analytics
+        const analytics = ExportManager.generateAnalytics(allCodes);
+        console.log('📊 Generated analytics insights');
+        
+        // 🎯 STEP 3: Create the  Multi-Sheet Workbook
+        const workbook = XLSX.utils.book_new();
+        
+        // 🔥 SHEET 1: Summary (Original Format - Backward Compatibility)
+        console.log('📋 Creating Summary sheet...');
+        const summarySheet = XLSX.utils.json_to_sheet(data.map(row => ({
+            'FilePath': row.filepath,
+            'Title': row.title,
+            'Gender': row.gender,
+            'Unique Name': row.unique_name,
+            'Keywords': row.keywords,
+            'ICD Code Root': row.icd_code_root,
+            'ICD Code Hierarchy': row.icd_code_hierarchy,
+            'Details - Description': row.details_description,
+            'Details - Score': row.details_score,
+            'Language': row.language,
+            'Status': row.status
+        })));
+        
+        // Summary sheet column widths
+        summarySheet['!cols'] = [
+            { wch: 35 }, { wch: 30 }, { wch: 8 }, { wch: 25 }, { wch: 40 },
+            { wch: 12 }, { wch: 25 }, { wch: 50 }, { wch: 20 }, { wch: 10 }, { wch: 12 }
         ];
-        worksheet['!cols'] = colWidths;
+        
+        XLSX.utils.book_append_sheet(workbook, summarySheet, 'Summary');
+        
+        // 🚀 SHEET 2: ICD Details (Normalized )
+        console.log('📊 Creating ICD Details sheet...');
+        const detailsSheet = XLSX.utils.json_to_sheet(allCodes.map(code => ({
+            'Document Path': code.document_path,
+            'Document Title': code.document_title,
+            'ICD Code': code.icd_code,
+            'Root Code': code.root_code,
+            'Code Chapter': code.code_chapter,
+            'Enhanced Description': code.enhanced_description,
+            'Confidence Score': code.confidence_score,
+            'Confidence Level': code.confidence_level,
+            'Document Gender': code.document_gender,
+            'Document Keywords': code.document_keywords ? code.document_keywords.substring(0, 100) + '...' : '',
+            'Language': code.document_language,
+            'Status': code.document_status
+        })));
+        
+        // Details sheet column widths
+        detailsSheet['!cols'] = [
+            { wch: 30 }, { wch: 25 }, { wch: 10 }, { wch: 8 }, { wch: 18 },
+            { wch: 45 }, { wch: 12 }, { wch: 12 }, { wch: 8 }, { wch: 30 }, { wch: 10 }, { wch: 10 }
+        ];
+        
+        // 🌈 CONFIDENCE-BASED COLOR CODING
+        ExportManager.applyConfidenceColors(detailsSheet, allCodes);
+        
+        XLSX.utils.book_append_sheet(workbook, detailsSheet, 'ICD_Details');
+        
+        // 📈 SHEET 3: Analytics
+        console.log('📈 Creating Analytics sheet...');
+        
+        // Create analytics workbook sections
+        const analyticsData = [
+            // Header
+            { 'Metric': '📊 ICD CODING ANALYTICS DASHBOARD', 'Value': '', 'Details': '' },
+            { 'Metric': '', 'Value': '', 'Details': '' },
+            
+            // Root Code Statistics
+            { 'Metric': '🏷️ ROOT CODE STATISTICS', 'Value': '', 'Details': '' },
+            { 'Metric': 'Root Code', 'Value': 'Category', 'Details': 'Documents | Codes | Avg Confidence' },
+            ...analytics.rootCodeStats.map(stat => ({
+                'Metric': stat.root_code,
+                'Value': stat.category_name,
+                'Details': `${stat.document_count} docs | ${stat.code_count} codes | ${stat.avg_confidence}`
+            })),
+            
+            { 'Metric': '', 'Value': '', 'Details': '' },
+            
+            // Confidence Distribution
+            { 'Metric': '🎯 CONFIDENCE DISTRIBUTION', 'Value': '', 'Details': '' },
+            { 'Metric': 'Confidence Range', 'Value': 'Code Count', 'Details': 'Percentage' },
+            ...analytics.confidenceDistribution.map(dist => ({
+                'Metric': dist.confidence_range,
+                'Value': dist.code_count.toString(),
+                'Details': dist.percentage
+            })),
+            
+            { 'Metric': '', 'Value': '', 'Details': '' },
+            
+            // Top Specific Codes
+            { 'Metric': '🏆 TOP SPECIFIC CODES', 'Value': '', 'Details': '' },
+            { 'Metric': 'ICD Code', 'Value': 'Description', 'Details': 'Frequency | Avg Confidence' },
+            ...analytics.topSpecificCodes.slice(0, 10).map(code => ({
+                'Metric': code.icd_code,
+                'Value': code.description,
+                'Details': `${code.frequency}x | ${code.avg_confidence}`
+            }))
+        ];
+        
+        const analyticsSheet = XLSX.utils.json_to_sheet(analyticsData);
+        
+        // Analytics sheet styling
+        analyticsSheet['!cols'] = [
+            { wch: 20 }, { wch: 35 }, { wch: 25 }
+        ];
+        
+        XLSX.utils.book_append_sheet(workbook, analyticsSheet, 'Analytics');
+        
+        // 🎯 Enhanced metadata
+        workbook.Props = {
+            Title: 'ICD-10 Medical Coding Analysis',
+            Subject: 'Multi-Sheet Medical Coding Results',
+            Author: 'AI Medical Coding System v2.0',
+            CreatedDate: new Date(),
+            Company: 'Medical AI Analytics'
+        };
+        
+        console.log('✨ Multi-sheet workbook created successfully!');
+        console.log(`📊 Summary: ${data.length} documents`);
+        console.log(`🔍 Details: ${allCodes.length} individual codes`);
+        console.log(`📈 Analytics: ${analytics.rootCodeStats.length} code categories`);
+        
+        // 🚀 DOWNLOAD
+        const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-');
+        XLSX.writeFile(workbook, `ICD_Medical_Coding_Analysis_${timestamp}.xlsx`);
+        
+        // Show success notification
+        NotificationManager.show(`🎉 Multi-sheet Excel exported! ${data.length} docs, ${allCodes.length} codes analyzed`, 'success');
+    }
 
-        XLSX.utils.book_append_sheet(workbook, worksheet, 'Medical Coding Results');
-        XLSX.writeFile(workbook, 'medical_coding_results.xlsx');
+    // 🌈 CONFIDENCE COLOR CODING 
+    static applyConfidenceColors(worksheet, codes) {
+        const range = XLSX.utils.decode_range(worksheet['!ref']);
+        
+        for (let row = 1; row <= range.e.r; row++) { // Skip header row
+            const codeIndex = row - 1;
+            if (codeIndex < codes.length) {
+                const confidence = codes[codeIndex].confidence_numeric;
+                const confidenceCell = XLSX.utils.encode_cell({ r: row, c: 6 }); // Confidence Score column
+                const levelCell = XLSX.utils.encode_cell({ r: row, c: 7 }); // Confidence Level column
+                
+                let fillColor = '';
+                if (confidence >= 90) {
+                    fillColor = 'FFD4EDDA'; // Green
+                } else if (confidence >= 70) {
+                    fillColor = 'FFFFF3CD'; // Yellow
+                } else {
+                    fillColor = 'FFF8D7DA'; // Red
+                }
+                
+                // Apply background colors
+                if (worksheet[confidenceCell]) {
+                    worksheet[confidenceCell].s = { fill: { fgColor: { rgb: fillColor } } };
+                }
+                if (worksheet[levelCell]) {
+                    worksheet[levelCell].s = { fill: { fgColor: { rgb: fillColor } } };
+                }
+            }
+        }
     }
 }
 
