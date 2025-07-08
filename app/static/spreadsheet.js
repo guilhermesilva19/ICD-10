@@ -1,6 +1,150 @@
 // AI Medical Coding - Spreadsheet Interface JavaScript - Modular & Clean
 
-// NEW: File Tree Processor for folder uploads
+// ZIP File Processor for zip uploads
+class ZipFileProcessor {
+    constructor() {
+        this.supportedTypes = ['.txt', '.pdf', '.doc', '.docx', '.html', '.htm'];
+        this.maxZipSize = 100 * 1024 * 1024; // 100MB limit
+    }
+
+    async extractZipFiles(zipFile) {
+        // Validate ZIP file size
+        if (zipFile.size > this.maxZipSize) {
+            throw new Error(`ZIP file too large (max ${Math.round(this.maxZipSize / 1024 / 1024)}MB)`);
+        }
+
+        // Validate file type
+        if (!zipFile.name.toLowerCase().endsWith('.zip')) {
+            throw new Error('Please select a valid ZIP file');
+        }
+
+        try {
+            // Initialize JSZip
+            if (typeof JSZip === 'undefined') {
+                throw new Error('ZIP processing library not loaded');
+            }
+
+            const zip = new JSZip();
+            const contents = await zip.loadAsync(zipFile);
+            const extractedFiles = [];
+            const skippedFiles = [];
+
+            // Process each file in the ZIP - Handle nested folders properly
+            for (let [filename, fileObj] of Object.entries(contents.files)) {
+                // Skip directories but NOT files inside directories
+                if (fileObj.dir) {
+                    continue;
+                }
+                
+                // Skip system files but allow nested files
+                if (filename.includes('__MACOSX/') || filename.endsWith('.DS_Store') || 
+                    filename.includes('/.') || filename.startsWith('.')) {
+                    skippedFiles.push(filename);
+                    continue;
+                }
+
+                // Extract file extension from the actual filename (not path)
+                const actualFilename = this.getCleanFilename(filename);
+                const extension = '.' + actualFilename.split('.').pop().toLowerCase();
+                
+                console.log(`Processing: ${filename} -> Extension: ${extension}`);
+                
+                if (this.supportedTypes.includes(extension)) {
+                    try {
+                        // Extract file content as blob
+                        const blob = await fileObj.async('blob');
+                        
+                        // Validate blob has content
+                        if (blob.size === 0) {
+                            console.warn(`Empty file skipped: ${filename}`);
+                            skippedFiles.push(filename);
+                            continue;
+                        }
+                        
+                        // Create File object with proper metadata
+                        const file = new File([blob], actualFilename, {
+                            type: this.getMimeType(extension),
+                            lastModified: fileObj.date ? fileObj.date.getTime() : Date.now()
+                        });
+                        
+                        // Add FULL relative path for display purposes (shows folder structure)
+                        // Use custom property since webkitRelativePath is read-only
+                        Object.defineProperty(file, 'zipPath', {
+                            value: filename,
+                            writable: false,
+                            enumerable: false,
+                            configurable: false
+                        });
+                        
+                        // For compatibility with existing folder upload code, try to set webkitRelativePath
+                        // This will work for manual file selection but not for programmatically created files
+                        try {
+                            Object.defineProperty(file, 'webkitRelativePath', {
+                                value: filename,
+                                writable: false,
+                                enumerable: false,
+                                configurable: false
+                            });
+                        } catch (e) {
+                            // Fallback: use zipPath for path information
+                            console.log('Using zipPath instead of webkitRelativePath for:', filename);
+                        }
+                        
+                        extractedFiles.push(file);
+                        
+                        console.log(`✅ Extracted: ${filename} (${blob.size} bytes)`);
+                    } catch (fileError) {
+                        console.warn(`Failed to extract ${filename}:`, fileError);
+                        skippedFiles.push(filename);
+                    }
+                } else {
+                    console.log(`❌ Unsupported type: ${filename} (${extension})`);
+                    skippedFiles.push(filename);
+                }
+            }
+
+            return {
+                extractedFiles,
+                skippedFiles,
+                totalFiles: Object.keys(contents.files).filter(name => !contents.files[name].dir).length
+            };
+
+        } catch (error) {
+            if (error.message.includes('Corrupted zip')) {
+                throw new Error('ZIP file appears to be corrupted or invalid');
+            }
+            throw new Error(`Failed to extract ZIP file: ${error.message}`);
+        }
+    }
+
+    getCleanFilename(path) {
+        // Extract just the filename from the path, handle both / and \ separators
+        const parts = path.replace(/\\/g, '/').split('/');
+        const filename = parts[parts.length - 1];
+        
+        // Return the filename, ensuring it's not empty
+        return filename || path;
+    }
+
+    // Helper function to get file path from either webkitRelativePath or zipPath
+    getFilePath(file) {
+        return file.webkitRelativePath || file.zipPath || file.name;
+    }
+
+    getMimeType(extension) {
+        const mimeTypes = {
+            '.pdf': 'application/pdf',
+            '.doc': 'application/msword',
+            '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            '.html': 'text/html',
+            '.htm': 'text/html',
+            '.txt': 'text/plain'
+        };
+        return mimeTypes[extension] || 'application/octet-stream';
+    }
+}
+
+// File Tree Processor for folder uploads
 class FileTreeProcessor {
     constructor() {
         this.supportedTypes = ['.txt', '.pdf', '.doc', '.docx', '.html', '.htm'];
@@ -13,14 +157,15 @@ class FileTreeProcessor {
             const extension = '.' + file.name.split('.').pop().toLowerCase();
             
             if (this.supportedTypes.includes(extension)) {
-                const fileInfo = {
-                    file: file,
-                    name: file.name,
-                    size: file.size,
-                    relativePath: file.webkitRelativePath || file.name,
-                    folderDepth: this.calculateFolderDepth(file.webkitRelativePath || file.name),
-                    parentFolder: this.extractParentFolder(file.webkitRelativePath || file.name)
-                };
+                            const filePath = file.webkitRelativePath || file.zipPath || file.name;
+            const fileInfo = {
+                file: file,
+                name: file.name,
+                size: file.size,
+                relativePath: filePath,
+                folderDepth: this.calculateFolderDepth(filePath),
+                parentFolder: this.extractParentFolder(filePath)
+            };
                 processedFiles.push(fileInfo);
             }
         }
@@ -38,9 +183,10 @@ class FileTreeProcessor {
     }
 
     extractRelativePath(file) {
-        if (file.webkitRelativePath) {
-            // For folder uploads, remove the root folder from the path
-            const pathParts = file.webkitRelativePath.split('/');
+        const filePath = file.webkitRelativePath || file.zipPath || file.name;
+        if (filePath && filePath !== file.name) {
+            // For folder/zip uploads, remove the root folder from the path
+            const pathParts = filePath.split('/');
             return pathParts.slice(1).join('/') || file.name;
         }
         return file.name;
@@ -246,8 +392,11 @@ class SpreadsheetProcessor {
         this.isProcessing = false;
         this.currentFileIndex = 0;
         this.completedFiles = 0;
-        this.currentMode = 'files'; // 'files' or 'folder'
+        this.currentMode = 'files'; // 'files', 'folder', or 'zip'
+        
+        // Initialize processors
         this.fileTreeProcessor = new FileTreeProcessor();
+        this.zipProcessor = new ZipFileProcessor();
         
         this.initializeElements();
         this.bindEvents();
@@ -257,6 +406,7 @@ class SpreadsheetProcessor {
         // Main elements
         this.fileInput = document.getElementById('fileInput');
         this.folderInput = document.getElementById('folderInput');
+        this.zipInput = document.getElementById('zipInput');
         this.uploadArea = document.getElementById('uploadArea');
         this.fileList = document.getElementById('fileList');
         
@@ -305,6 +455,7 @@ class SpreadsheetProcessor {
         this.selectFilesBtn.addEventListener('click', () => this.selectFiles());
         this.fileInput.addEventListener('change', (e) => this.handleFileSelection(e));
         this.folderInput.addEventListener('change', (e) => this.handleFolderSelection(e));
+        this.zipInput.addEventListener('change', (e) => this.handleZipSelection(e));
         
         // Drag and drop events
         this.uploadArea.addEventListener('dragover', (e) => this.handleDragOver(e));
@@ -347,10 +498,11 @@ class SpreadsheetProcessor {
             }
         });
         
-        // Update UI elements
+        // Update UI elements based on mode
         if (mode === 'folder') {
             this.fileInput.style.display = 'none';
             this.folderInput.style.display = 'block';
+            this.zipInput.style.display = 'none';
             this.uploadIcon.className = 'fas fa-folder-open';
             this.uploadText.textContent = 'Drag & Drop Folder Here';
             this.uploadHint.innerHTML = `
@@ -359,9 +511,22 @@ class SpreadsheetProcessor {
                 <strong style="color: var(--primary-color);">Will process all supported files recursively</strong>
             `;
             this.selectFilesBtn.innerHTML = '<i class="fas fa-folder"></i> Select Folder';
+        } else if (mode === 'zip') {
+            this.fileInput.style.display = 'none';
+            this.folderInput.style.display = 'none';
+            this.zipInput.style.display = 'block';
+            this.uploadIcon.className = 'fas fa-file-archive';
+            this.uploadText.textContent = 'Upload ZIP File';
+            this.uploadHint.innerHTML = `
+                or click to browse<br>
+                <small>Supports: ZIP files containing PDF, DOC, DOCX, TXT, HTML</small><br>
+                <strong style="color: var(--primary-color);">Will extract and process all supported files</strong>
+            `;
+            this.selectFilesBtn.innerHTML = '<i class="fas fa-file-archive"></i> Select ZIP';
         } else {
             this.fileInput.style.display = 'block';
             this.folderInput.style.display = 'none';
+            this.zipInput.style.display = 'none';
             this.uploadIcon.className = 'fas fa-file-medical';
             this.uploadText.textContent = 'Drag & Drop Files Here';
             this.uploadHint.innerHTML = `
@@ -378,6 +543,8 @@ class SpreadsheetProcessor {
     selectFiles() {
         if (this.currentMode === 'folder') {
             this.folderInput.click();
+        } else if (this.currentMode === 'zip') {
+            this.zipInput.click();
         } else {
             this.fileInput.multiple = true;
             this.fileInput.click();
@@ -392,6 +559,52 @@ class SpreadsheetProcessor {
     handleFolderSelection(event) {
         const selectedFiles = Array.from(event.target.files);
         this.addFolderFiles(selectedFiles);
+    }
+
+    async handleZipSelection(event) {
+        const zipFile = event.target.files[0];
+        if (!zipFile) return;
+
+        try {
+            NotificationManager.show('Extracting ZIP file...', 'info');
+            
+            const result = await this.zipProcessor.extractZipFiles(zipFile);
+            const { extractedFiles, skippedFiles, totalFiles } = result;
+
+            if (extractedFiles.length === 0) {
+                NotificationManager.show('No supported files found in ZIP', 'warning');
+                return;
+            }
+
+            // Add extracted files to the file list
+            this.addFiles(extractedFiles);
+
+            // Show detailed extraction summary
+            let message = `Extracted ${extractedFiles.length} files from "${zipFile.name}"`;
+            if (skippedFiles.length > 0) {
+                message += ` (${skippedFiles.length} files skipped)`;
+            }
+            
+            // Show folder structure info if nested files found
+            const nestedFiles = extractedFiles.filter(f => (f.webkitRelativePath || f.zipPath || '').includes('/'));
+            if (nestedFiles.length > 0) {
+                message += ` - Found files in subdirectories`;
+            }
+            
+            NotificationManager.show(message, 'success');
+
+            // Log details for debugging
+            console.log('ZIP extraction complete:', {
+                zipFile: zipFile.name,
+                totalFiles,
+                extractedFiles: extractedFiles.length,
+                skippedFiles: skippedFiles.length
+            });
+
+        } catch (error) {
+            NotificationManager.show(`ZIP extraction failed: ${error.message}`, 'error');
+            console.error('ZIP extraction error:', error);
+        }
     }
 
     handleDragOver(event) {
@@ -409,7 +622,17 @@ class SpreadsheetProcessor {
         this.uploadArea.classList.remove('dragover');
         
         const droppedFiles = Array.from(event.dataTransfer.files);
-        this.addFiles(droppedFiles);
+        
+        // Check if a single ZIP file was dropped
+        if (droppedFiles.length === 1 && droppedFiles[0].name.toLowerCase().endsWith('.zip')) {
+            // Switch to ZIP mode and process the ZIP file
+            this.switchMode('zip');
+            const fakeEvent = { target: { files: droppedFiles } };
+            this.handleZipSelection(fakeEvent);
+        } else {
+            // Handle as regular files
+            this.addFiles(droppedFiles);
+        }
     }
 
     addFiles(newFiles) {
@@ -420,9 +643,9 @@ class SpreadsheetProcessor {
         });
 
         validFiles.forEach(file => {
-            const relativePath = file.webkitRelativePath || file.name;
+            const relativePath = file.webkitRelativePath || file.zipPath || file.name;
             const isDuplicate = this.files.some(existingFile => 
-                (existingFile.webkitRelativePath || existingFile.name) === relativePath
+                (existingFile.webkitRelativePath || existingFile.zipPath || existingFile.name) === relativePath
             );
             
             if (!isDuplicate) {
@@ -448,7 +671,7 @@ class SpreadsheetProcessor {
         
         processedFiles.forEach(fileInfo => {
             const isDuplicate = this.files.some(existingFile => 
-                (existingFile.webkitRelativePath || existingFile.name) === fileInfo.relativePath
+                (existingFile.webkitRelativePath || existingFile.zipPath || existingFile.name) === fileInfo.relativePath
             );
             
             if (!isDuplicate) {
@@ -484,7 +707,7 @@ class SpreadsheetProcessor {
                 </h4>
                 <div style="max-height: 250px; overflow-y: auto;">
                     ${this.files.map((file, index) => {
-                        const relativePath = file.webkitRelativePath || file.name;
+                        const relativePath = file.webkitRelativePath || file.zipPath || file.name;
                         const folderDepth = relativePath.split('/').length - 1;
                         const indent = folderDepth > 0 ? `margin-left: ${folderDepth * 20}px;` : '';
                         const pathDisplay = folderDepth > 0 ? 
@@ -576,7 +799,7 @@ class SpreadsheetProcessor {
     }
 
     createPlaceholderRow(file, index) {
-        const fullPath = file.webkitRelativePath || file.name;
+        const fullPath = file.webkitRelativePath || file.zipPath || file.name;
         const row = document.createElement('tr');
         row.id = `result-row-${index}`;
         row.className = 'animate__animated animate__fadeInUp';
@@ -586,7 +809,7 @@ class SpreadsheetProcessor {
 
     async processFile(file, index) {
         // CRITICAL: Separate full path for display vs filename for backend
-        const fullPath = file.webkitRelativePath || file.name;  // Full path for frontend display
+        const fullPath = file.webkitRelativePath || file.zipPath || file.name;  // Full path for frontend display
         const filename = file.name; // Only filename for backend title processing
         
         // Update row to processing state
@@ -697,6 +920,8 @@ class SpreadsheetProcessor {
     newBatch() {
         this.clearAll();
         this.fileInput.value = '';
+        this.folderInput.value = '';
+        this.zipInput.value = '';
     }
 
     // Export functionality
