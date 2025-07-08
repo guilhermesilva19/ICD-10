@@ -1,10 +1,59 @@
 // AI Medical Coding - Spreadsheet Interface JavaScript - Modular & Clean
+
+// NEW: File Tree Processor for folder uploads
+class FileTreeProcessor {
+    constructor() {
+        this.supportedTypes = ['.txt', '.pdf', '.doc', '.docx', '.html', '.htm'];
+    }
+
+    scanFiles(fileList) {
+        const processedFiles = [];
+        
+        for (const file of fileList) {
+            const extension = '.' + file.name.split('.').pop().toLowerCase();
+            
+            if (this.supportedTypes.includes(extension)) {
+                const fileInfo = {
+                    file: file,
+                    name: file.name,
+                    size: file.size,
+                    relativePath: file.webkitRelativePath || file.name,
+                    folderDepth: this.calculateFolderDepth(file.webkitRelativePath || file.name),
+                    parentFolder: this.extractParentFolder(file.webkitRelativePath || file.name)
+                };
+                processedFiles.push(fileInfo);
+            }
+        }
+        
+        return processedFiles;
+    }
+
+    calculateFolderDepth(path) {
+        return path.split('/').length - 1;
+    }
+
+    extractParentFolder(path) {
+        const parts = path.split('/');
+        return parts.length > 1 ? parts[parts.length - 2] : 'root';
+    }
+
+    extractRelativePath(file) {
+        if (file.webkitRelativePath) {
+            // For folder uploads, remove the root folder from the path
+            const pathParts = file.webkitRelativePath.split('/');
+            return pathParts.slice(1).join('/') || file.name;
+        }
+        return file.name;
+    }
+}
+
 class DataProcessor {
-    static cleanAndMapResult(rawResult, filename) {
+    static cleanAndMapResult(rawResult, filepath) {
         // Force correct field mapping with explicit fallbacks
+        // IMPORTANT: filepath comes from frontend (full path), title comes from backend (processed from filename only)
         return {
-            filepath: filename,
-            title: rawResult.title || 'N/A',
+            filepath: filepath, // Full path from frontend
+            title: rawResult.title || 'N/A', // Processed title from backend
             gender: rawResult.gender || 'N/A',
             unique_name: rawResult.unique_name || 'N/A',
             keywords: rawResult.keywords || 'N/A',
@@ -197,6 +246,8 @@ class SpreadsheetProcessor {
         this.isProcessing = false;
         this.currentFileIndex = 0;
         this.completedFiles = 0;
+        this.currentMode = 'files'; // 'files' or 'folder'
+        this.fileTreeProcessor = new FileTreeProcessor();
         
         this.initializeElements();
         this.bindEvents();
@@ -205,8 +256,15 @@ class SpreadsheetProcessor {
     initializeElements() {
         // Main elements
         this.fileInput = document.getElementById('fileInput');
+        this.folderInput = document.getElementById('folderInput');
         this.uploadArea = document.getElementById('uploadArea');
         this.fileList = document.getElementById('fileList');
+        
+        // Mode toggle elements
+        this.modeButtons = document.querySelectorAll('.mode-btn');
+        this.uploadIcon = document.getElementById('uploadIcon');
+        this.uploadText = document.getElementById('uploadText');
+        this.uploadHint = document.getElementById('uploadHint');
         
         // Buttons
         this.selectFilesBtn = document.getElementById('selectFilesBtn');
@@ -238,9 +296,15 @@ class SpreadsheetProcessor {
     }
 
     bindEvents() {
+        // Mode toggle events
+        this.modeButtons.forEach(btn => {
+            btn.addEventListener('click', (e) => this.switchMode(e.target.dataset.mode));
+        });
+        
         // File selection events
         this.selectFilesBtn.addEventListener('click', () => this.selectFiles());
         this.fileInput.addEventListener('change', (e) => this.handleFileSelection(e));
+        this.folderInput.addEventListener('change', (e) => this.handleFolderSelection(e));
         
         // Drag and drop events
         this.uploadArea.addEventListener('dragover', (e) => this.handleDragOver(e));
@@ -267,14 +331,67 @@ class SpreadsheetProcessor {
         });
     }
 
+    switchMode(mode) {
+        this.currentMode = mode;
+        
+        // Update button states
+        this.modeButtons.forEach(btn => {
+            btn.classList.remove('active');
+            if (btn.dataset.mode === mode) {
+                btn.classList.add('active');
+                btn.style.background = 'var(--primary-color)';
+                btn.style.color = 'white';
+            } else {
+                btn.style.background = 'transparent';
+                btn.style.color = 'var(--gray-600)';
+            }
+        });
+        
+        // Update UI elements
+        if (mode === 'folder') {
+            this.fileInput.style.display = 'none';
+            this.folderInput.style.display = 'block';
+            this.uploadIcon.className = 'fas fa-folder-open';
+            this.uploadText.textContent = 'Drag & Drop Folder Here';
+            this.uploadHint.innerHTML = `
+                or click to browse<br>
+                <small>Supports: PDF, DOC, DOCX, TXT, HTML | Entire folder structure</small><br>
+                <strong style="color: var(--primary-color);">Will process all supported files recursively</strong>
+            `;
+            this.selectFilesBtn.innerHTML = '<i class="fas fa-folder"></i> Select Folder';
+        } else {
+            this.fileInput.style.display = 'block';
+            this.folderInput.style.display = 'none';
+            this.uploadIcon.className = 'fas fa-file-medical';
+            this.uploadText.textContent = 'Drag & Drop Files Here';
+            this.uploadHint.innerHTML = `
+                or click to browse<br>
+                <small>Supports: PDF, DOC, DOCX, TXT, HTML | Select multiple files</small><br>
+                <strong style="color: var(--primary-color);">Expected filename format:</strong><br>
+                <code style="background: #f0f0f0; padding: 2px 4px; border-radius: 3px;">Title Name 05-24-2025.pdf</code> or 
+                <code style="background: #f0f0f0; padding: 2px 4px; border-radius: 3px;">Title Name.html</code>
+            `;
+            this.selectFilesBtn.innerHTML = '<i class="fas fa-file-medical"></i> Select Files';
+        }
+    }
+
     selectFiles() {
-        this.fileInput.multiple = true;
-        this.fileInput.click();
+        if (this.currentMode === 'folder') {
+            this.folderInput.click();
+        } else {
+            this.fileInput.multiple = true;
+            this.fileInput.click();
+        }
     }
 
     handleFileSelection(event) {
         const selectedFiles = Array.from(event.target.files);
         this.addFiles(selectedFiles);
+    }
+
+    handleFolderSelection(event) {
+        const selectedFiles = Array.from(event.target.files);
+        this.addFolderFiles(selectedFiles);
     }
 
     handleDragOver(event) {
@@ -303,8 +420,9 @@ class SpreadsheetProcessor {
         });
 
         validFiles.forEach(file => {
+            const relativePath = file.webkitRelativePath || file.name;
             const isDuplicate = this.files.some(existingFile => 
-                existingFile.name === file.name && existingFile.size === file.size
+                (existingFile.webkitRelativePath || existingFile.name) === relativePath
             );
             
             if (!isDuplicate) {
@@ -325,6 +443,33 @@ class SpreadsheetProcessor {
         }
     }
 
+    addFolderFiles(folderFiles) {
+        const processedFiles = this.fileTreeProcessor.scanFiles(folderFiles);
+        
+        processedFiles.forEach(fileInfo => {
+            const isDuplicate = this.files.some(existingFile => 
+                (existingFile.webkitRelativePath || existingFile.name) === fileInfo.relativePath
+            );
+            
+            if (!isDuplicate) {
+                this.files.push(fileInfo.file);
+            }
+        });
+
+        this.updateFileList();
+        this.updateProcessButton();
+
+        const skippedCount = folderFiles.length - processedFiles.length;
+        if (skippedCount > 0) {
+            NotificationManager.show(`${skippedCount} files were skipped (unsupported format)`, 'warning');
+        }
+
+        if (processedFiles.length > 0) {
+            const folderName = processedFiles[0].relativePath.split('/')[0] || 'folder';
+            NotificationManager.show(`Added ${processedFiles.length} files from "${folderName}"`, 'success');
+        }
+    }
+
     updateFileList() {
         if (this.files.length === 0) {
             this.fileList.innerHTML = '';
@@ -335,21 +480,35 @@ class SpreadsheetProcessor {
             <div style="background: var(--gray-50); border-radius: 10px; padding: 20px; margin-top: 20px;">
                 <h4 style="margin-bottom: 15px; color: var(--gray-800);">
                     <i class="fas fa-list"></i> Selected Files (${this.files.length})
+                    ${this.currentMode === 'folder' ? '<span style="margin-left: 10px; font-size: 0.8rem; color: var(--gray-600);">📁 Folder Mode</span>' : ''}
                 </h4>
-                <div style="max-height: 200px; overflow-y: auto;">
-                    ${this.files.map((file, index) => `
-                        <div style="display: flex; justify-content: between; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--gray-200);">
-                            <div style="flex: 1;">
-                                <i class="fas fa-file-medical" style="color: var(--primary-color); margin-right: 8px;"></i>
-                                <span style="font-weight: 500;">${file.name}</span>
-                                <span style="color: var(--gray-600); margin-left: 10px;">(${this.formatFileSize(file.size)})</span>
+                <div style="max-height: 250px; overflow-y: auto;">
+                    ${this.files.map((file, index) => {
+                        const relativePath = file.webkitRelativePath || file.name;
+                        const folderDepth = relativePath.split('/').length - 1;
+                        const indent = folderDepth > 0 ? `margin-left: ${folderDepth * 20}px;` : '';
+                        const pathDisplay = folderDepth > 0 ? 
+                            `<div style="font-size: 0.8rem; color: var(--gray-500); ${indent}">${relativePath}</div>` : '';
+                        
+                        return `
+                            <div style="padding: 8px 0; border-bottom: 1px solid var(--gray-200);">
+                                <div style="display: flex; justify-content: space-between; align-items: center;">
+                                    <div style="flex: 1;">
+                                        <div style="${indent}">
+                                            <i class="fas fa-file-medical" style="color: var(--primary-color); margin-right: 8px;"></i>
+                                            <span style="font-weight: 500;">${file.name}</span>
+                                            <span style="color: var(--gray-600); margin-left: 10px;">(${this.formatFileSize(file.size)})</span>
+                                        </div>
+                                        ${pathDisplay}
+                                    </div>
+                                    <button onclick="processor.removeFile(${index})" 
+                                            style="background: var(--danger-color); color: white; border: none; border-radius: 5px; padding: 4px 8px; cursor: pointer; font-size: 0.8rem;">
+                                        <i class="fas fa-times"></i>
+                                    </button>
+                                </div>
                             </div>
-                            <button onclick="processor.removeFile(${index})" 
-                                    style="background: var(--danger-color); color: white; border: none; border-radius: 5px; padding: 4px 8px; cursor: pointer; font-size: 0.8rem;">
-                                <i class="fas fa-times"></i>
-                            </button>
-                        </div>
-                    `).join('')}
+                        `;
+                    }).join('')}
                 </div>
             </div>
         `;
@@ -417,23 +576,26 @@ class SpreadsheetProcessor {
     }
 
     createPlaceholderRow(file, index) {
+        const fullPath = file.webkitRelativePath || file.name;
         const row = document.createElement('tr');
         row.id = `result-row-${index}`;
         row.className = 'animate__animated animate__fadeInUp';
-        row.innerHTML = TableRenderer.createPlaceholderRow(file.webkitRelativePath || file.name);
+        row.innerHTML = TableRenderer.createPlaceholderRow(fullPath);
         this.resultsTableBody.appendChild(row);
     }
 
     async processFile(file, index) {
-        const filename = file.webkitRelativePath || file.name;
+        // CRITICAL: Separate full path for display vs filename for backend
+        const fullPath = file.webkitRelativePath || file.name;  // Full path for frontend display
+        const filename = file.name; // Only filename for backend title processing
         
         // Update row to processing state
         const row = document.getElementById(`result-row-${index}`);
         if (row) {
-            row.innerHTML = TableRenderer.createProcessingRow(filename);
+            row.innerHTML = TableRenderer.createProcessingRow(fullPath);
         }
 
-        this.showCurrentProcessing(filename);
+        this.showCurrentProcessing(fullPath);
 
         try {
             const formData = new FormData();
@@ -446,8 +608,8 @@ class SpreadsheetProcessor {
 
             const rawResult = await response.json();
             
-            // **CRITICAL FIX: Clean and map the result properly**
-            const cleanResult = DataProcessor.cleanAndMapResult(rawResult, filename);
+            // **CRITICAL FIX: Override filepath with full path from frontend**
+            const cleanResult = DataProcessor.cleanAndMapResult(rawResult, fullPath);
 
             if (response.ok) {
                 this.updateResultRow(index, cleanResult, 'success');
@@ -464,7 +626,7 @@ class SpreadsheetProcessor {
                 title: 'Client-side Error',
                 status: 'error',
                 error: error.message
-            }, filename);
+            }, fullPath);
             
             this.updateResultRow(index, errorResult, 'error');
             this.results.push(errorResult);

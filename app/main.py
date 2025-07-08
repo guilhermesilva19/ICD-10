@@ -45,14 +45,17 @@ async def analyze_document(file: UploadFile = File(...)) -> Dict[str, Any]:
     Same two-step AI process as spreadsheet but simplified for single documents
     """
     try:
-        # Step 1: Extract title
+        # Step 1: Extract clean filename (strip any path)
+        clean_filename = file.filename.split('/')[-1] if '/' in file.filename else file.filename
+        
+        # Step 2: Extract title
         file_content = await file.read()
-        title = extract_title_from_file(file_content, file.filename)
+        title = extract_title_from_file(file_content, clean_filename)
         
         if not title:
             raise HTTPException(
                 status_code=400,
-                detail=f"Could not extract title from file: {file.filename}"
+                detail=f"Could not extract title from file: {clean_filename}"
             )
         
         # Step 2: AI Title Enrichment
@@ -133,27 +136,30 @@ async def process_spreadsheet_document(file: UploadFile = File(...)) -> Spreadsh
     5. Return structured spreadsheet row
     """
     try:
-        # Step 1: Extract title
+        # Step 1: Extract clean filename (strip any path)
+        clean_filename = file.filename.split('/')[-1] if '/' in file.filename else file.filename
+        
+        # Step 2: Extract title
         file_content = await file.read()
-        title = extract_title_from_file(file_content, file.filename)
+        title = extract_title_from_file(file_content, clean_filename)
         
         if not title:
             raise HTTPException(
                 status_code=400,
-                detail=f"Could not extract title from file: {file.filename}"
+                detail=f"Could not extract title from file: {clean_filename}"
             )
         
-        # Step 2: Extract full document content for comprehensive keyword analysis
-        full_content = extract_text_from_file(file_content, file.filename)
+        # Step 3: Extract full document content for comprehensive keyword analysis
+        full_content = extract_text_from_file(file_content, clean_filename)
         
-        # Step 3: AI Title Enrichment for better vector search
+        # Step 4: AI Title Enrichment for better vector search
         enrichment_result = title_enricher.enrich_title(title)
         search_text = f"{title} {enrichment_result.enriched_keywords}"
         
-        # Step 4: AI Metadata Generation with full document content
+        # Step 5: AI Metadata Generation with full document content
         metadata_result = title_enricher.generate_metadata(title, full_content)
         
-        # Step 5: Vector Search 
+        # Step 6: Vector Search 
         # Search all codes directly - let AI decide what's relevant
         all_candidates = vectorstore.search_all_codes(search_text, top_k=450)
         
@@ -163,9 +169,9 @@ async def process_spreadsheet_document(file: UploadFile = File(...)) -> Spreadsh
                 detail="No relevant codes found in vector search"
             )
         
-        # Step 6: Two-Step AI Validation Process
+        # Step 7: Two-Step AI Validation Process
         
-        # Step 6a: Initial Selection (~50 codes)
+        # Step 7a: Initial Selection (~50 codes)
         selection_result = await validator.initial_selection(search_text, all_candidates)
         
         if not selection_result.selected_codes:
@@ -174,7 +180,7 @@ async def process_spreadsheet_document(file: UploadFile = File(...)) -> Spreadsh
                 detail="No codes selected in initial selection step"
             )
         
-        # Step 6b: Clinical Refinement (enhanced descriptions + confidence)
+        # Step 7b: Clinical Refinement (enhanced descriptions + confidence)
         refinement_result = await validator.clinical_refinement(
             search_text, 
             selection_result.selected_codes, 
@@ -187,7 +193,7 @@ async def process_spreadsheet_document(file: UploadFile = File(...)) -> Spreadsh
                 detail="No codes validated in clinical refinement step"
             )
         
-        # Step 7: Format Results for Spreadsheet Output
+        # Step 8: Format Results for Spreadsheet Output
         root_codes = extract_root_codes_simple(refinement_result.refined_codes)
         hierarchy_codes = extract_hierarchy_codes_simple(refinement_result.refined_codes)
         code_descriptions = format_enhanced_descriptions(refinement_result.refined_codes)
@@ -196,7 +202,7 @@ async def process_spreadsheet_document(file: UploadFile = File(...)) -> Spreadsh
         # Generate unique name
         unique_name = title.replace(" ", "_").replace(",", "").replace("(", "").replace(")", "")
         
-        # Step 8: Return Clean Spreadsheet Row
+        # Step 9: Return Clean Spreadsheet Row
         return SpreadsheetRow(
             filepath=file.filename,
             title=title,

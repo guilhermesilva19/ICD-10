@@ -695,16 +695,34 @@
         <div class="upload-section animate__animated animate__fadeInUp">
             <h2 style="margin-bottom: 20px; color: var(--gray-800);"><i class="fas fa-cloud-upload-alt"></i> Document Upload</h2>
             
-            <div class="upload-area" id="uploadArea">
-                <input type="file" id="fileInput" class="file-input" multiple 
-                       accept=".txt,.pdf,.doc,.docx,.html,.htm">
-                <div class="upload-icon">
-                    <i class="fas fa-folder-plus"></i>
+            <!-- Upload Mode Toggle -->
+            <div style="margin-bottom: 20px; text-align: center;">
+                <div class="upload-mode-toggle" style="display: inline-flex; background: var(--gray-100); border-radius: 12px; padding: 4px;">
+                    <button class="mode-btn active" data-mode="files" style="padding: 12px 20px; border: none; border-radius: 8px; background: var(--primary-color); color: white; cursor: pointer; transition: all 0.3s ease; font-weight: 600;">
+                        <i class="fas fa-file-medical"></i> Select Files
+                    </button>
+                    <button class="mode-btn" data-mode="folder" style="padding: 12px 20px; border: none; border-radius: 8px; background: transparent; color: var(--gray-600); cursor: pointer; transition: all 0.3s ease; font-weight: 600;">
+                        <i class="fas fa-folder"></i> Upload Folder
+                    </button>
                 </div>
-                <div class="upload-text">Drag & Drop Files or Folders Here</div>
-                <div class="upload-hint">
+            </div>
+            
+            <div class="upload-area" id="uploadArea">
+                <!-- File Input (default) -->
+                <input type="file" id="fileInput" class="file-input" multiple 
+                       accept=".txt,.pdf,.doc,.docx,.html,.htm" style="display: block;">
+                
+                <!-- Folder Input (hidden by default) -->
+                <input type="file" id="folderInput" class="file-input" webkitdirectory 
+                       accept=".txt,.pdf,.doc,.docx,.html,.htm" style="display: none;">
+                
+                <div class="upload-icon">
+                    <i class="fas fa-folder-plus" id="uploadIcon"></i>
+                </div>
+                <div class="upload-text" id="uploadText">Drag & Drop Files Here</div>
+                <div class="upload-hint" id="uploadHint">
                     or click to browse<br>
-                    <small>Supports: PDF, DOC, DOCX, TXT, HTML | Multiple files or entire folders</small><br>
+                    <small>Supports: PDF, DOC, DOCX, TXT, HTML | Select multiple files</small><br>
                     <strong style="color: var(--primary-color);">Expected filename format:</strong><br>
                     <code style="background: #f0f0f0; padding: 2px 4px; border-radius: 3px;">Title Name 05-24-2025.pdf</code> or 
                     <code style="background: #f0f0f0; padding: 2px 4px; border-radius: 3px;">Title Name.html</code>
