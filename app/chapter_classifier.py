@@ -64,19 +64,36 @@ class ChapterClassifier:
             raise ValueError(f"Failed to parse OpenAI response: {e}")
     
     def get_high_probability_chapters(self, classification: ChapterClassification, 
-                                    threshold: float = 0.5) -> list:
+                                    threshold: float = 0.5, max_chapters: int = 2) -> list:
         """
-        Filter chapters with probability above threshold
+        Get focused chapter selection: 1 main chapter + 1 optional (if >50%)
         
         Args:
             classification: The chapter classification result
-            threshold: Minimum probability threshold
+            threshold: Minimum probability threshold (default 0.5)
+            max_chapters: Maximum number of chapters to return (default 2)
             
         Returns:
-            list: Chapter names with probability above threshold
+            list: 1 main chapter + 1 optional chapter (if confidence >50%), focused approach
         """
-        return [
-            pred.chapter_name 
-            for pred in classification.predictions 
-            if pred.probability >= threshold
-        ] 
+        # Sort predictions by probability (highest first)
+        sorted_predictions = sorted(
+            classification.predictions, 
+            key=lambda x: x.probability, 
+            reverse=True
+        )
+        
+        selected_chapters = []
+        
+        # Always take the highest probability chapter (main focus)
+        if sorted_predictions:
+            main_chapter = sorted_predictions[0]
+            selected_chapters.append(main_chapter.chapter_name)
+            
+            # Add second chapter ONLY if it has >50% confidence (optional)
+            if len(sorted_predictions) > 1:
+                second_chapter = sorted_predictions[1]
+                if second_chapter.probability > 0.5:
+                    selected_chapters.append(second_chapter.chapter_name)
+        
+        return selected_chapters 

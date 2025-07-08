@@ -36,7 +36,8 @@ class ValidationResponse(BaseModel):
     model_config = ConfigDict(extra='forbid')
     
     validated_codes: List[CodeValidation] = Field(
-        description="List of validated ICD codes with confidence scores"
+        description="List of up to 30 validated ICD codes with confidence scores, ordered by confidence",
+        max_items=30
     )
     overall_recommendation: str = Field(
         description="Summary recommendation about the best matching codes"
@@ -62,14 +63,19 @@ class DocumentMetadata(BaseModel):
 
 
 class SpreadsheetRow(BaseModel):
-    """Single row for spreadsheet output"""
+    """Single row for spreadsheet output - Clean and Simple"""
     filepath: str
     title: str
-    gender: str
-    unique_name: str
-    keywords: str
-    diagnosis_codes: str
-    cpt_codes: str = ""  # Leave blank for now
+    icd_code_root: str = Field(description="Root ICD codes only: Z0, R34, F84")
+    icd_code_hierarchy: str = Field(description="Full hierarchy codes only: Z12.344, R34.3, F84.0")
+    details_description: str = Field(description="Code with descriptions: Z12.44: blah blah, R34.3: another description")
+    details_score: str = Field(description="Code with confidence: Z123.2: 60%, R34.3: 75%")
+    # Keep existing fields for backward compatibility and other data
+    gender: str = ""
+    unique_name: str = ""
+    keywords: str = ""
+    diagnosis_codes: str = ""  # For backward compatibility
+    cpt_codes: str = ""
     language: str = "English"
     source: str = "AI Medical Coding System"
     document_type: str = "Patient Education" 

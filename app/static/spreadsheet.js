@@ -1,11 +1,202 @@
-// AI Medical Coding - Spreadsheet Interface JavaScript
+// AI Medical Coding - Spreadsheet Interface JavaScript - Modular & Clean
+class DataProcessor {
+    static cleanAndMapResult(rawResult, filename) {
+        // Force correct field mapping with explicit fallbacks
+        return {
+            filepath: filename,
+            title: rawResult.title || 'N/A',
+            gender: rawResult.gender || 'N/A',
+            unique_name: rawResult.unique_name || 'N/A',
+            keywords: rawResult.keywords || 'N/A',
+            icd_code_root: rawResult.icd_code_root || '',
+            icd_code_hierarchy: rawResult.icd_code_hierarchy || '',
+            details_description: rawResult.details_description || '',
+            details_score: rawResult.details_score || '',
+            language: rawResult.language || 'English',
+            status: 'completed',
+            // Keep for backward compatibility
+            diagnosis_codes: rawResult.diagnosis_codes || rawResult.icd_code_hierarchy || '',
+            cpt_codes: rawResult.cpt_codes || ''
+        };
+    }
+
+    static formatGenderBadge(gender) {
+        if (!gender || gender === 'N/A') return 'N/A';
+        return `<span class="gender-badge gender-${gender.toLowerCase()}">${gender}</span>`;
+    }
+
+    static formatStatusIcon(isSuccess) {
+        return isSuccess 
+            ? '<i class="fas fa-check-circle status-completed"></i>'
+            : '<i class="fas fa-exclamation-circle status-error"></i>';
+    }
+}
+
+class TableRenderer {
+    static createTableRow(result, isSuccess = true) {
+        const statusIcon = DataProcessor.formatStatusIcon(isSuccess);
+        const genderBadge = DataProcessor.formatGenderBadge(result.gender);
+        
+        return `
+            <td class="col-filepath">${result.filepath}</td>
+            <td class="col-title">${result.title}</td>
+            <td class="col-gender">${genderBadge}</td>
+            <td>${result.unique_name}</td>
+            <td class="col-keywords">${result.keywords}</td>
+            <td class="col-icd-root">${result.icd_code_root}</td>
+            <td class="col-icd-hierarchy">${result.icd_code_hierarchy}</td>
+            <td class="col-details-description" style="max-width: 400px; word-wrap: break-word;">${result.details_description}</td>
+            <td class="col-details-score" style="max-width: 300px; word-wrap: break-word;">${result.details_score}</td>
+            <td class="col-language">${result.language}</td>
+            <td>${statusIcon} ${result.status}</td>
+        `;
+    }
+
+    static createPlaceholderRow(filename) {
+        return `
+            <td class="col-filepath">${filename}</td>
+            <td colspan="10" style="color: var(--warning-color);">
+                <div class="spinner" style="display: inline-block; vertical-align: middle; margin-right: 8px;"></div>
+                Processing...
+            </td>
+        `;
+    }
+
+    static createProcessingRow(filename) {
+        return `
+            <td class="col-filepath">${filename}</td>
+            <td colspan="9" style="color: var(--warning-color);">
+                <div class="spinner" style="display: inline-block; vertical-align: middle; margin-right: 8px;"></div>
+                Processing...
+            </td>
+            <td><i class="fas fa-cogs status-processing"></i> Processing</td>
+        `;
+    }
+}
+
+class ExportManager {
+    static convertToCSV(data) {
+        if (data.length === 0) return '';
+
+        const headers = [
+            'FilePath', 'Title', 'Gender', 'Unique Name', 'Keywords', 
+            'ICD Code Root', 'ICD Code Hierarchy', 'Details - Description', 
+            'Details - Score', 'Language', 'Status'
+        ];
+        const csvRows = [headers.join(',')];
+
+        data.forEach(row => {
+            const values = [
+                ExportManager.escapeCSVField(row.filepath),
+                ExportManager.escapeCSVField(row.title),
+                ExportManager.escapeCSVField(row.gender),
+                ExportManager.escapeCSVField(row.unique_name),
+                ExportManager.escapeCSVField(row.keywords),
+                ExportManager.escapeCSVField(row.icd_code_root),
+                ExportManager.escapeCSVField(row.icd_code_hierarchy),
+                ExportManager.escapeCSVField(row.details_description),
+                ExportManager.escapeCSVField(row.details_score),
+                ExportManager.escapeCSVField(row.language),
+                ExportManager.escapeCSVField(row.status)
+            ];
+            csvRows.push(values.join(','));
+        });
+
+        return csvRows.join('\n');
+    }
+
+    static escapeCSVField(field) {
+        if (field === null || field === undefined) return '';
+        const stringField = String(field);
+        if (stringField.includes(',') || stringField.includes('"') || stringField.includes('\n')) {
+            return `"${stringField.replace(/"/g, '""')}"`;
+        }
+        return stringField;
+    }
+
+    static downloadFile(content, filename, mimeType) {
+        const blob = new Blob([content], { type: mimeType });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+    }
+
+    static exportAsExcel(data) {
+        const workbook = XLSX.utils.book_new();
+        const worksheet = XLSX.utils.json_to_sheet(data);
+        
+        const colWidths = [
+            { wch: 30 }, // filepath
+            { wch: 40 }, // title
+            { wch: 10 }, // gender
+            { wch: 30 }, // unique_name
+            { wch: 50 }, // keywords
+            { wch: 15 }, // icd_code_root
+            { wch: 30 }, // icd_code_hierarchy
+            { wch: 60 }, // details_description
+            { wch: 30 }, // details_score
+            { wch: 10 }, // language
+            { wch: 15 }  // status
+        ];
+        worksheet['!cols'] = colWidths;
+
+        XLSX.utils.book_append_sheet(workbook, worksheet, 'Medical Coding Results');
+        XLSX.writeFile(workbook, 'medical_coding_results.xlsx');
+    }
+}
+
+class NotificationManager {
+    static show(message, type = 'info') {
+        const notification = document.createElement('div');
+        notification.style.cssText = `
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 15px 20px;
+            border-radius: 10px;
+            color: white;
+            font-weight: 600;
+            z-index: 10000;
+            max-width: 300px;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+            animation: slideInRight 0.3s ease;
+        `;
+
+        const colors = {
+            success: '#059669',
+            error: '#dc2626',
+            warning: '#d97706',
+            info: '#2563eb'
+        };
+
+        notification.style.background = colors[type] || colors.info;
+        notification.textContent = message;
+
+        document.body.appendChild(notification);
+
+        setTimeout(() => {
+            notification.style.animation = 'slideOutRight 0.3s ease';
+            setTimeout(() => {
+                if (notification.parentNode) {
+                    document.body.removeChild(notification);
+                }
+            }, 300);
+        }, 3000);
+    }
+}
+
 class SpreadsheetProcessor {
     constructor() {
         this.files = [];
         this.results = [];
         this.isProcessing = false;
         this.currentFileIndex = 0;
-        this.completedFiles = 0; // For tracking parallel progress
+        this.completedFiles = 0;
         
         this.initializeElements();
         this.bindEvents();
@@ -24,7 +215,7 @@ class SpreadsheetProcessor {
         this.exportBtn = document.getElementById('exportBtn');
         this.newBatchBtn = document.getElementById('newBatchBtn');
         
-        // Progress elements (now integrated)
+        // Progress elements
         this.progressContainer = document.getElementById('progressContainer');
         this.progressBar = document.getElementById('progressBar');
         this.progressStats = document.getElementById('progressStats');
@@ -105,14 +296,12 @@ class SpreadsheetProcessor {
     }
 
     addFiles(newFiles) {
-        // Filter supported file types
         const supportedTypes = ['.txt', '.pdf', '.doc', '.docx', '.html', '.htm'];
         const validFiles = newFiles.filter(file => {
             const extension = '.' + file.name.split('.').pop().toLowerCase();
             return supportedTypes.includes(extension);
         });
 
-        // Add valid files to the list (avoid duplicates)
         validFiles.forEach(file => {
             const isDuplicate = this.files.some(existingFile => 
                 existingFile.name === file.name && existingFile.size === file.size
@@ -126,14 +315,13 @@ class SpreadsheetProcessor {
         this.updateFileList();
         this.updateProcessButton();
 
-        // Show notification for invalid files
         const invalidCount = newFiles.length - validFiles.length;
         if (invalidCount > 0) {
-            this.showNotification(`${invalidCount} files were skipped (unsupported format)`, 'warning');
+            NotificationManager.show(`${invalidCount} files were skipped (unsupported format)`, 'warning');
         }
 
         if (validFiles.length > 0) {
-            this.showNotification(`Added ${validFiles.length} files`, 'success');
+            NotificationManager.show(`Added ${validFiles.length} files`, 'success');
         }
     }
 
@@ -185,60 +373,67 @@ class SpreadsheetProcessor {
         this.isProcessing = true;
         this.results = [];
         this.currentFileIndex = 0;
-        this.completedFiles = 0; // For tracking parallel progress
+        this.completedFiles = 0;
 
-        // Show the main results panel with the progress container inside it
         this.resultsSection.style.display = 'block';
         this.progressContainer.style.display = 'block';
 
-        // Reset progress and stats
         this.updateProgress(0, this.files.length);
         this.progressBar.style.width = '0%';
         this.currentProcessing.innerHTML = `
             <div class="processing-file">
                 <div class="spinner"></div>
-                <span>processing...</span>
+                <span>Initializing...</span>
             </div>
         `;
 
-        // Clear previous results and create placeholder rows for all files
+        // Clear previous results
         this.resultsTableBody.innerHTML = '';
+
+        // Create placeholder rows
         this.files.forEach((file, index) => {
             this.createPlaceholderRow(file, index);
         });
 
-        // Process files sequentially
-        for (const [index, file] of this.files.entries()) {
-            await this.processFile(file, index);
+        // Process files in parallel with concurrency limit
+        const concurrencyLimit = 3;
+        const batches = [];
+        for (let i = 0; i < this.files.length; i += concurrencyLimit) {
+            batches.push(this.files.slice(i, i + concurrencyLimit));
         }
 
-        // Final UI updates after all processing is done
+        for (const batch of batches) {
+            const promises = batch.map((file, batchIndex) => {
+                const globalIndex = batches.indexOf(batch) * concurrencyLimit + batchIndex;
+                return this.processFile(file, globalIndex);
+            });
+            
+            await Promise.all(promises);
+        }
+
         this.isProcessing = false;
         this.updateProcessButton();
+        NotificationManager.show('All files processed!', 'success');
     }
 
     createPlaceholderRow(file, index) {
         const row = document.createElement('tr');
-        row.id = `result-row-${index}`; // Assign a unique ID to each row
-        row.innerHTML = `
-            <td class="col-filepath">${file.webkitRelativePath || file.name}</td>
-            <td colspan="6" style="color: var(--gray-600);">Waiting to process...</td>
-            <td><i class="fas fa-clock status-processing"></i> Queued</td>
-        `;
+        row.id = `result-row-${index}`;
+        row.className = 'animate__animated animate__fadeInUp';
+        row.innerHTML = TableRenderer.createPlaceholderRow(file.webkitRelativePath || file.name);
         this.resultsTableBody.appendChild(row);
     }
 
     async processFile(file, index) {
-        // Update placeholder row to "processing"
-        const rowToUpdate = document.getElementById(`result-row-${index}`);
-        rowToUpdate.innerHTML = `
-            <td class="col-filepath">${file.webkitRelativePath || file.name}</td>
-            <td colspan="6" style="color: var(--warning-color);">
-                <div class="spinner" style="display: inline-block; vertical-align: middle; margin-right: 8px;"></div>
-                Processing...
-            </td>
-            <td><i class="fas fa-cogs status-processing"></i> Processing</td>
-        `;
+        const filename = file.webkitRelativePath || file.name;
+        
+        // Update row to processing state
+        const row = document.getElementById(`result-row-${index}`);
+        if (row) {
+            row.innerHTML = TableRenderer.createProcessingRow(filename);
+        }
+
+        this.showCurrentProcessing(filename);
 
         try {
             const formData = new FormData();
@@ -249,37 +444,35 @@ class SpreadsheetProcessor {
                 body: formData
             });
 
-            const result = await response.json();
+            const rawResult = await response.json();
             
-            // **OVERRIDE FILEPATH FROM FRONTEND**
-            result.filepath = file.webkitRelativePath || file.name;
+            // **CRITICAL FIX: Clean and map the result properly**
+            const cleanResult = DataProcessor.cleanAndMapResult(rawResult, filename);
 
             if (response.ok) {
-                result.status = 'completed';
-                result.error = null;
-                this.updateResultRow(index, result, 'success');
+                this.updateResultRow(index, cleanResult, 'success');
             } else {
-                result.status = 'error';
-                result.error = result.detail || 'Processing failed';
-                this.updateResultRow(index, result, 'error');
+                cleanResult.status = 'error';
+                cleanResult.error = rawResult.detail || 'Processing failed';
+                this.updateResultRow(index, cleanResult, 'error');
             }
-            this.results.push(result);
+            
+            this.results.push(cleanResult);
 
         } catch (error) {
-            const errorResult = {
-                filepath: file.webkitRelativePath || file.name,
+            const errorResult = DataProcessor.cleanAndMapResult({
                 title: 'Client-side Error',
                 status: 'error',
                 error: error.message
-            };
+            }, filename);
+            
             this.updateResultRow(index, errorResult, 'error');
             this.results.push(errorResult);
         } finally {
-            // Update overall progress after each file is done
             this.completedFiles++;
             this.updateProgress(this.completedFiles, this.files.length);
             this.progressBar.style.width = `${(this.completedFiles / this.files.length) * 100}%`;
-            this.updateStats(); // Update stats in real-time
+            this.updateStats();
         }
     }
 
@@ -287,36 +480,21 @@ class SpreadsheetProcessor {
         const row = document.getElementById(`result-row-${index}`);
         if (!row) return;
 
-        const statusIcon = type === 'success' 
-            ? '<i class="fas fa-check-circle status-completed"></i>' 
-            : '<i class="fas fa-exclamation-circle status-error"></i>';
-
-        const genderBadge = result.gender ? 
-            `<span class="gender-badge gender-${result.gender.toLowerCase()}">${result.gender}</span>` : 'N/A';
-
-        row.innerHTML = `
-            <td class="col-filepath">${result.filepath}</td>
-            <td class="col-title">${result.title || 'N/A'}</td>
-            <td class="col-gender">${genderBadge}</td>
-            <td>${result.unique_name || 'N/A'}</td>
-            <td class="col-keywords">${result.keywords || 'N/A'}</td>
-            <td class="col-diagnosis">${result.diagnosis_codes || (type === 'error' ? result.error : 'None Found')}</td>
-            <td class="col-language">${result.language || 'N/A'}</td>
-            <td>${statusIcon} ${result.status}</td>
-        `;
+        const isSuccess = type === 'success';
+        row.innerHTML = TableRenderer.createTableRow(result, isSuccess);
     }
 
     updateStats() {
         const successful = this.results.filter(r => r.status === 'completed').length;
         const errors = this.results.filter(r => r.status === 'error').length;
         const totalCodes = this.results.reduce((sum, r) => {
-            if (r.diagnosis_codes) {
-                return sum + r.diagnosis_codes.split(',').filter(code => code.trim()).length;
+            if (r.icd_code_hierarchy) {
+                return sum + r.icd_code_hierarchy.split(',').filter(code => code.trim()).length;
             }
             return sum;
         }, 0);
 
-        this.totalFiles.textContent = this.files.length; // Show total files to be processed
+        this.totalFiles.textContent = this.files.length;
         this.successCount.textContent = successful;
         this.errorCount.textContent = errors;
         this.totalCodes.textContent = totalCodes;
@@ -331,31 +509,6 @@ class SpreadsheetProcessor {
         `;
     }
 
-    addResultRow(result, type) {
-        const row = document.createElement('tr');
-        row.className = type === 'error' ? 'animate__animated animate__fadeInUp' : 'animate__animated animate__fadeInUp';
-        
-        const statusIcon = type === 'success' ? 
-            '<i class="fas fa-check-circle status-completed"></i>' : 
-            '<i class="fas fa-exclamation-circle status-error"></i>';
-
-        const genderBadge = result.gender ? 
-            `<span class="gender-badge gender-${result.gender.toLowerCase()}">${result.gender}</span>` : '';
-
-        row.innerHTML = `
-            <td class="col-filepath">${result.filepath}</td>
-            <td class="col-title">${result.title}</td>
-            <td class="col-gender">${genderBadge}</td>
-            <td>${result.unique_name}</td>
-            <td class="col-keywords">${result.keywords}</td>
-            <td class="col-diagnosis">${result.diagnosis_codes}</td>
-            <td class="col-language">${result.language}</td>
-            <td>${statusIcon} ${result.status}</td>
-        `;
-
-        this.resultsTableBody.appendChild(row);
-    }
-
     updateProgress(current, total) {
         this.progressStats.textContent = `${current} / ${total} completed`;
         if (current === total) {
@@ -368,20 +521,15 @@ class SpreadsheetProcessor {
         }
     }
 
-    showResults() {
-        // This function is no longer needed as results are shown in real-time.
-        // Kept empty to avoid breaking any potential calls, but logic is moved.
-    }
-
     clearAll() {
         this.files = [];
         this.results = [];
         this.updateFileList();
         this.updateProcessButton();
-        this.resultsSection.style.display = 'none'; // Hide the main panel
-        this.progressContainer.style.display = 'none'; // Hide progress
-        this.updateStats(); // Reset stats to 0
-        this.showNotification('All files cleared', 'info');
+        this.resultsSection.style.display = 'none';
+        this.progressContainer.style.display = 'none';
+        this.updateStats();
+        NotificationManager.show('All files cleared', 'info');
     }
 
     newBatch() {
@@ -392,7 +540,7 @@ class SpreadsheetProcessor {
     // Export functionality
     showExportModal() {
         if (this.results.length === 0) {
-            this.showNotification('No results to export', 'warning');
+            NotificationManager.show('No results to export', 'warning');
             return;
         }
         this.exportModal.style.display = 'block';
@@ -403,85 +551,23 @@ class SpreadsheetProcessor {
     }
 
     exportAsCSV() {
-        const csvContent = this.convertToCSV(this.results);
-        this.downloadFile(csvContent, 'medical_coding_results.csv', 'text/csv');
+        const csvContent = ExportManager.convertToCSV(this.results);
+        ExportManager.downloadFile(csvContent, 'medical_coding_results.csv', 'text/csv');
         this.hideExportModal();
-        this.showNotification('CSV exported successfully', 'success');
+        NotificationManager.show('CSV exported successfully', 'success');
     }
 
     exportAsExcel() {
-        const workbook = XLSX.utils.book_new();
-        const worksheet = XLSX.utils.json_to_sheet(this.results);
-        
-        // Set column widths
-        const colWidths = [
-            { wch: 30 }, // filepath
-            { wch: 40 }, // title
-            { wch: 10 }, // gender
-            { wch: 30 }, // unique_name
-            { wch: 50 }, // keywords
-            { wch: 30 }, // diagnosis_codes
-            { wch: 10 }, // language
-            { wch: 15 }  // status
-        ];
-        worksheet['!cols'] = colWidths;
-
-        XLSX.utils.book_append_sheet(workbook, worksheet, 'Medical Coding Results');
-        XLSX.writeFile(workbook, 'medical_coding_results.xlsx');
-        
+        ExportManager.exportAsExcel(this.results);
         this.hideExportModal();
-        this.showNotification('Excel file exported successfully', 'success');
+        NotificationManager.show('Excel file exported successfully', 'success');
     }
 
     exportAsJSON() {
         const jsonContent = JSON.stringify(this.results, null, 2);
-        this.downloadFile(jsonContent, 'medical_coding_results.json', 'application/json');
+        ExportManager.downloadFile(jsonContent, 'medical_coding_results.json', 'application/json');
         this.hideExportModal();
-        this.showNotification('JSON exported successfully', 'success');
-    }
-
-    convertToCSV(data) {
-        if (data.length === 0) return '';
-
-        const headers = ['Filepath', 'Title', 'Gender', 'Unique Name', 'Keywords', 'Diagnosis Codes', 'Language', 'Status'];
-        const csvRows = [headers.join(',')];
-
-        data.forEach(row => {
-            const values = [
-                this.escapeCSVField(row.filepath),
-                this.escapeCSVField(row.title),
-                this.escapeCSVField(row.gender),
-                this.escapeCSVField(row.unique_name),
-                this.escapeCSVField(row.keywords),
-                this.escapeCSVField(row.diagnosis_codes),
-                this.escapeCSVField(row.language),
-                this.escapeCSVField(row.status)
-            ];
-            csvRows.push(values.join(','));
-        });
-
-        return csvRows.join('\n');
-    }
-
-    escapeCSVField(field) {
-        if (field === null || field === undefined) return '';
-        const stringField = String(field);
-        if (stringField.includes(',') || stringField.includes('"') || stringField.includes('\n')) {
-            return `"${stringField.replace(/"/g, '""')}"`;
-        }
-        return stringField;
-    }
-
-    downloadFile(content, filename, mimeType) {
-        const blob = new Blob([content], { type: mimeType });
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = filename;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        URL.revokeObjectURL(url);
+        NotificationManager.show('JSON exported successfully', 'success');
     }
 
     formatFileSize(bytes) {
@@ -492,94 +578,13 @@ class SpreadsheetProcessor {
         return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
     }
 
-    showNotification(message, type = 'info') {
-        // Create notification element
-        const notification = document.createElement('div');
-        notification.style.cssText = `
-            position: fixed;
-            top: 20px;
-            right: 20px;
-            padding: 15px 20px;
-            border-radius: 10px;
-            color: white;
-            font-weight: 600;
-            z-index: 10000;
-            max-width: 300px;
-            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
-            animation: slideInRight 0.3s ease;
-        `;
-
-        // Set background color based on type
-        const colors = {
-            success: '#059669',
-            error: '#dc2626',
-            warning: '#d97706',
-            info: '#2563eb'
-        };
-        notification.style.backgroundColor = colors[type] || colors.info;
-
-        // Set icon based on type
-        const icons = {
-            success: 'fas fa-check-circle',
-            error: 'fas fa-exclamation-circle',
-            warning: 'fas fa-exclamation-triangle',
-            info: 'fas fa-info-circle'
-        };
-        const icon = icons[type] || icons.info;
-
-        notification.innerHTML = `
-            <i class="${icon}" style="margin-right: 10px;"></i>
-            ${message}
-        `;
-
-        document.body.appendChild(notification);
-
-        // Remove after 3 seconds
-        setTimeout(() => {
-            notification.style.animation = 'slideOutRight 0.3s ease';
-            setTimeout(() => {
-                if (notification.parentNode) {
-                    notification.parentNode.removeChild(notification);
-                }
-            }, 300);
-        }, 3000);
-    }
-
     delay(ms) {
         return new Promise(resolve => setTimeout(resolve, ms));
     }
 }
 
-// CSS animations for notifications
-const style = document.createElement('style');
-style.textContent = `
-    @keyframes slideInRight {
-        from {
-            transform: translateX(100%);
-            opacity: 0;
-        }
-        to {
-            transform: translateX(0);
-            opacity: 1;
-        }
-    }
-    
-    @keyframes slideOutRight {
-        from {
-            transform: translateX(0);
-            opacity: 1;
-        }
-        to {
-            transform: translateX(100%);
-            opacity: 0;
-        }
-    }
-`;
-document.head.appendChild(style);
-
-// Initialize the processor when page loads
-document.addEventListener('DOMContentLoaded', () => {
-    // Create one instance and assign it to the global scope
-    // so that inline onclick handlers can access it.
-    window.processor = new SpreadsheetProcessor();
+// Initialize the processor when the DOM is loaded
+let processor;
+document.addEventListener('DOMContentLoaded', function() {
+    processor = new SpreadsheetProcessor();
 }); 
