@@ -1,136 +1,153 @@
-"""Test script for the AI Medical Coding System - Clean Two-Step Process"""
+"""
+🧪 AI Medical Coding System - Test Suite
+
+Tests the two-step AI validation process:
+1. Initial selection (~50 codes from vector search)
+2. Clinical refinement (enhanced descriptions + confidence)
+"""
 
 import asyncio
-from .vectorstore import VectorStore
-from .ai_validator import AIValidator
 from .title_enricher import TitleEnricher
+from .ai_validator import AIValidator
+from .vectorstore import VectorStore
 
 
-async def test_new_two_step_process():
-    """Test the new clean two-step AI validation process"""
+async def test_two_step_process():
+    """Test the complete two-step AI validation process"""
     
-    # Sample medical text for testing
-    test_text = """
-    Patient presents with chest pain and shortness of breath. 
-    History of diabetes mellitus type 2. 
-    Physical examination reveals elevated blood pressure and irregular heartbeat.
-    EKG shows signs consistent with myocardial infarction.
-    Blood glucose levels are elevated at 250 mg/dL.
-    Patient reports recent weight loss and frequent urination.
-    """
+    print("🧪 Testing Two-Step AI Validation Process...")
+    print("=" * 60)
     
-    print("🧪 Testing AI Medical Coding System - Clean Two-Step Process")
-    print("=" * 70)
+    # Initialize components
+    enricher = TitleEnricher()
+    validator = AIValidator()
+    vectorstore = VectorStore()
+    
+    # Test data
+    test_text = "Patient education about chest pain and diabetes management"
     
     try:
-        # Test 1: Title Enrichment
-        print("\n1️⃣ Testing Title Enrichment...")
-        enricher = TitleEnricher()
-        enrichment_result = enricher.enrich_title("Chest Pain and Diabetes")
+        print(f"📄 Test Input: {test_text}")
+        print()
         
-        print(f"✅ Original: Chest Pain and Diabetes")
-        print(f"✅ Enriched: {enrichment_result.enriched_keywords}")
+        # Step 1: Title enrichment
+        print("🔍 Step 1: Title Enrichment...")
+        enrichment = enricher.enrich_title(test_text)
+        search_text = f"{test_text} {enrichment.enriched_keywords}"
+        print(f"✅ Enhanced search text: {search_text}")
+        print()
         
-        # Enhanced search text
-        enhanced_text = f"{test_text} {enrichment_result.enriched_keywords}"
+        # Step 2: Vector search
+        print("📊 Step 2: Vector Search...")
+        candidates = vectorstore.search_all_codes(search_text, top_k=200)
+        print(f"✅ Found {len(candidates)} candidate codes")
+        print()
         
-        # Test 2: Direct Vector Search (No Chapter Limitations)
-        print("\n2️⃣ Testing Direct Vector Search...")
-        vectorstore = VectorStore()
+        # Step 3: Initial selection
+        print("🎯 Step 3: Initial Selection...")
+        selection_result = await validator.initial_selection(search_text, candidates)
+        print(f"✅ Selected {len(selection_result.selected_codes)} codes for review")
+        print()
         
-        all_candidates = vectorstore.search_all_codes(enhanced_text, top_k=450)
-        print(f"✅ Found {len(all_candidates)} candidate codes across ALL chapters")
-        
-        # Show sample candidates
-        print(f"\n📋 Sample candidate codes:")
-        for i, candidate in enumerate(all_candidates[:5]):
-            print(f"   {i+1}. {candidate['icd_code']} - {candidate['description'][:80]}...")
-            print(f"      Similarity: {candidate['score']:.3f} | Chapter: {candidate['chapter']}")
-        
-        # Test 3: Step 1 - Initial Selection (~50 codes)
-        print("\n3️⃣ Testing Step 1: Initial Selection...")
-        validator = AIValidator()
-        
-        selection_result = await validator.initial_selection(enhanced_text, all_candidates)
-        
-        print(f"✅ Step 1 Complete!")
-        print(f"📊 Selected {len(selection_result.selected_codes)} codes from {len(all_candidates)} candidates")
-        
-        print(f"\n🎯 Selected codes for clinical review:")
-        for i, code in enumerate(selection_result.selected_codes[:10]):
-            print(f"   {i+1}. {code}")
-        if len(selection_result.selected_codes) > 10:
-            print(f"   ... and {len(selection_result.selected_codes) - 10} more codes")
-        
-        # Test 4: Step 2 - Clinical Refinement
-        print("\n4️⃣ Testing Step 2: Clinical Refinement...")
-        
+        # Step 4: Clinical refinement
+        print("🩺 Step 4: Clinical Refinement...")
         refinement_result = await validator.clinical_refinement(
-            enhanced_text, 
+            search_text, 
             selection_result.selected_codes, 
-            all_candidates
+            candidates
         )
+        print(f"✅ Final validated codes: {len(refinement_result.refined_codes)}")
+        print()
         
-        print(f"✅ Step 2 Complete!")
-        print(f"📊 Refined to {len(refinement_result.refined_codes)} clinically relevant codes")
+        # Display results
+        print("📋 Final Results:")
+        print("-" * 40)
+        for code in refinement_result.refined_codes[:5]:  # Show top 5
+            confidence_pct = int(code.confidence_score * 100)
+            print(f"• {code.icd_code} ({confidence_pct}%): {code.enhanced_description}")
         
-        print(f"\n🏆 Final Clinically Relevant Codes:")
-        for code in refinement_result.refined_codes:
-            conf_percent = code.confidence_score * 100
-            print(f"   ✓ {code.icd_code} - {conf_percent:.1f}%")
-            print(f"     Original: {code.original_description[:80]}...")
-            print(f"     Enhanced: {code.enhanced_description[:80]}...")
-            print()
+        print()
+        print(f"🏥 Clinical Summary: {refinement_result.clinical_summary}")
         
-        print(f"💡 Clinical Summary:")
-        print(f"   {refinement_result.clinical_summary}")
-        
-        # Test 5: Metadata Generation
-        print("\n5️⃣ Testing Metadata Generation...")
-        metadata_result = enricher.generate_metadata("Chest Pain and Diabetes")
-        
-        print(f"✅ Gender Applicability: {metadata_result.gender}")
-        print(f"✅ Keywords: {metadata_result.keywords}")
-        
-        print("\n" + "=" * 70)
-        print("🎉 NEW TWO-STEP PROCESS TEST COMPLETED SUCCESSFULLY!")
-        print("✨ Clean, Simple, and Powerful Architecture Working!")
-        
-        # Summary
-        print(f"\n📈 PROCESS SUMMARY:")
-        print(f"   📤 Input: {len(all_candidates)} vector search results")
-        print(f"   🔽 Step 1: Filtered to {len(selection_result.selected_codes)} relevant codes")
-        print(f"   🔽 Step 2: Refined to {len(refinement_result.refined_codes)} final codes")
-        print(f"   📊 Efficiency: {len(refinement_result.refined_codes)/len(all_candidates)*100:.1f}% final selection rate")
+        print("\n✅ Two-step process completed successfully!")
         
     except Exception as e:
         print(f"❌ Test failed: {str(e)}")
-        import traceback
-        traceback.print_exc()
+        raise
 
 
-async def test_legacy_compatibility():
-    """Test that legacy /analyze endpoint still works"""
+async def test_spreadsheet_workflow():
+    """Test the complete spreadsheet processing workflow"""
     
-    print("\n🧪 Testing Legacy Compatibility...")
+    print("\n🧪 Testing Spreadsheet Workflow...")
+    print("=" * 60)
     
-    test_text = "Patient with diabetes and heart problems"
+    # Initialize components
+    enricher = TitleEnricher()
+    validator = AIValidator()
+    vectorstore = VectorStore()
+    
+    # Test data
+    title = "Chest Pain and Diabetes"
+    test_content = "This document provides patient education about managing chest pain symptoms in diabetic patients. It covers cardiovascular risks, blood sugar monitoring, and when to seek emergency care."
     
     try:
-        vectorstore = VectorStore()
-        validator = AIValidator()
+        print(f"📄 Test Title: {title}")
+        print(f"📝 Test Content: {test_content[:100]}...")
+        print()
         
-        # Legacy flow
-        candidates = vectorstore.search_all_codes(test_text, top_k=200)
-        validation_result = validator.validate_codes(test_text, candidates)
-        high_confidence = validator.get_high_confidence_codes(validation_result, 0.4)
+        # Step 1: Title enrichment for search
+        print("🔍 Step 1: Title Enrichment...")
+        enrichment_result = enricher.enrich_title(title)
+        search_text = f"{title} {enrichment_result.enriched_keywords}"
+        print(f"✅ Search terms: {search_text}")
+        print()
         
-        print(f"✅ Legacy system working: {len(high_confidence)} codes found")
+        # Step 2: Metadata generation from full content
+        print("📊 Step 2: Metadata Generation...")
+        metadata = enricher.generate_metadata(title, test_content)
+        print(f"✅ Gender: {metadata.gender}")
+        print(f"✅ Keywords: {metadata.keywords}")
+        print()
+        
+        # Step 3: Vector search and AI validation
+        print("🎯 Step 3: Vector Search & AI Validation...")
+        candidates = vectorstore.search_all_codes(search_text, top_k=450)
+        
+        selection_result = await validator.initial_selection(search_text, candidates)
+        refinement_result = await validator.clinical_refinement(
+            search_text, 
+            selection_result.selected_codes, 
+            candidates
+        )
+        
+        print(f"✅ Processed {len(candidates)} → {len(selection_result.selected_codes)} → {len(refinement_result.refined_codes)} codes")
+        print()
+        
+        # Display results
+        print("📋 Spreadsheet Row Data:")
+        print("-" * 40)
+        
+        # Extract root codes
+        root_codes = set()
+        for code in refinement_result.refined_codes:
+            if len(code.icd_code) >= 3:
+                root_codes.add(code.icd_code[:3])
+        
+        hierarchy_codes = [code.icd_code for code in refinement_result.refined_codes]
+        
+        print(f"• Root Codes: {', '.join(sorted(root_codes))}")
+        print(f"• Hierarchy Codes: {', '.join(hierarchy_codes)}")
+        print(f"• Gender: {metadata.gender}")
+        print(f"• Keywords: {metadata.keywords[:100]}...")
+        
+        print("\n✅ Spreadsheet workflow completed successfully!")
         
     except Exception as e:
-        print(f"❌ Legacy test failed: {str(e)}")
+        print(f"❌ Spreadsheet test failed: {str(e)}")
+        raise
 
 
 if __name__ == "__main__":
-    asyncio.run(test_new_two_step_process())
-    asyncio.run(test_legacy_compatibility()) 
+    asyncio.run(test_two_step_process())
+    asyncio.run(test_spreadsheet_workflow()) 

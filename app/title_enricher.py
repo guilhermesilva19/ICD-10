@@ -67,18 +67,24 @@ class TitleEnricher:
                 reasoning="Fallback due to API error"
             )
     
-    def generate_metadata(self, title: str) -> DocumentMetadata:
+    def generate_metadata(self, title: str, content: str = None) -> DocumentMetadata:
         """
-        Generate document metadata (gender, keywords) from title
+        Generate document metadata (gender, keywords) from title and document content
         
         Args:
             title: Medical document title
+            content: Full document content (optional, falls back to title only)
             
         Returns:
             DocumentMetadata: Generated gender and keywords
         """
         try:
-            prompt = METADATA_GENERATION_PROMPT.format(title=title)
+            analysis_text = content if content else title
+            
+            prompt = METADATA_GENERATION_PROMPT.format(
+                title=title, 
+                content=analysis_text
+            )
             
             response = self.client.chat.completions.create(
                 model=self.model,
