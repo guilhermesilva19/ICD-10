@@ -150,7 +150,7 @@ async def process_spreadsheet_document(file: UploadFile = File(...)) -> Spreadsh
         
         # Step 6: Vector Search 
         # Search all codes directly - let AI decide what's relevant
-        all_candidates = vectorstore.search_all_codes(search_text, top_k=450)
+        all_candidates = vectorstore.search_all_codes(search_text, top_k=150)
         
         if not all_candidates:
             raise HTTPException(
