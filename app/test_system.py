@@ -1,13 +1,13 @@
-"""Test script for the AI Medical Coding System with structured outputs"""
+"""Test script for the AI Medical Coding System - Clean Two-Step Process"""
 
 import asyncio
-from .chapter_classifier import ChapterClassifier
 from .vectorstore import VectorStore
 from .ai_validator import AIValidator
+from .title_enricher import TitleEnricher
 
 
-async def test_structured_outputs():
-    """Test the complete workflow with structured outputs"""
+async def test_new_two_step_process():
+    """Test the new clean two-step AI validation process"""
     
     # Sample medical text for testing
     test_text = """
@@ -19,84 +19,89 @@ async def test_structured_outputs():
     Patient reports recent weight loss and frequent urination.
     """
     
-    print("🧪 Testing AI Medical Coding System with Structured Outputs")
-    print("=" * 60)
+    print("🧪 Testing AI Medical Coding System - Clean Two-Step Process")
+    print("=" * 70)
     
     try:
-        # Test 1: Chapter Classification
-        print("\n1️⃣ Testing Chapter Classification...")
-        classifier = ChapterClassifier()
-        chapter_result = classifier.classify_chapters(test_text)
+        # Test 1: Title Enrichment
+        print("\n1️⃣ Testing Title Enrichment...")
+        enricher = TitleEnricher()
+        enrichment_result = enricher.enrich_title("Chest Pain and Diabetes")
         
-        print(f"✅ Found {len(chapter_result.predictions)} chapter predictions:")
-        for pred in chapter_result.predictions:
-            prob_percent = pred.probability * 100
-            print(f"   📋 {pred.chapter_name}")
-            print(f"      Probability: {prob_percent:.1f}%")
-            print(f"      Reasoning: {pred.reasoning}")
-            print()
+        print(f"✅ Original: Chest Pain and Diabetes")
+        print(f"✅ Enriched: {enrichment_result.enriched_keywords}")
         
-        # Get high probability chapters
-        target_chapters = classifier.get_high_probability_chapters(chapter_result, 0.5)
-        print(f"🎯 Target chapters (>50%): {len(target_chapters)}")
+        # Enhanced search text
+        enhanced_text = f"{test_text} {enrichment_result.enriched_keywords}"
         
-        # Test 2: Vector Search
-        print("\n2️⃣ Testing Vector Search...")
+        # Test 2: Direct Vector Search (No Chapter Limitations)
+        print("\n2️⃣ Testing Direct Vector Search...")
         vectorstore = VectorStore()
         
-        if target_chapters:
-            search_results = vectorstore.search_codes_by_chapter(
-                test_text, target_chapters, top_k=10
-            )
-            
-            total_candidates = sum(len(results) for results in search_results.values())
-            print(f"✅ Found {total_candidates} candidate codes across {len(search_results)} chapters")
-            
-            # Flatten for validation
-            all_candidates = []
-            for chapter_name, codes in search_results.items():
-                print(f"   📂 {chapter_name}: {len(codes)} codes")
-                all_candidates.extend(codes[:5])  # Top 5 per chapter for testing
-        else:
-            print("⚠️  No high-probability chapters found, searching all chapters...")
-            all_candidates = vectorstore.search_all_codes(test_text, top_k=20)
-            print(f"✅ Found {len(all_candidates)} candidate codes (global search)")
+        all_candidates = vectorstore.search_all_codes(enhanced_text, top_k=450)
+        print(f"✅ Found {len(all_candidates)} candidate codes across ALL chapters")
         
         # Show sample candidates
         print(f"\n📋 Sample candidate codes:")
-        for i, candidate in enumerate(all_candidates[:3]):
-            print(f"   {i+1}. {candidate['icd_code']} - {candidate['description']}")
-            print(f"      Similarity: {candidate['score']:.3f}")
+        for i, candidate in enumerate(all_candidates[:5]):
+            print(f"   {i+1}. {candidate['icd_code']} - {candidate['description'][:80]}...")
+            print(f"      Similarity: {candidate['score']:.3f} | Chapter: {candidate['chapter']}")
         
-        # Test 3: AI Validation
-        print("\n3️⃣ Testing AI Validation...")
+        # Test 3: Step 1 - Initial Selection (~50 codes)
+        print("\n3️⃣ Testing Step 1: Initial Selection...")
         validator = AIValidator()
         
-        if all_candidates:
-            validation_result = validator.validate_codes(test_text, all_candidates)
-            
-            print(f"✅ Validation complete!")
-            print(f"📊 Evaluated {len(validation_result.validated_codes)} codes")
-            
-            # Get high confidence codes
-            final_codes = validator.get_high_confidence_codes(validation_result, 0.5)
-            print(f"🏆 High confidence codes (>50%): {len(final_codes)}")
-            
-            print(f"\n🎯 Final Recommendations:")
-            for code in final_codes:
-                conf_percent = code.confidence_score * 100
-                print(f"   ✓ {code.icd_code} - {code.description}")
-                print(f"     Confidence: {conf_percent:.1f}%")
-                print(f"     Reasoning: {code.reasoning}")
-                print()
-            
-            print(f"💡 Overall Recommendation:")
-            print(f"   {validation_result.overall_recommendation}")
-        else:
-            print("⚠️  No candidates available for validation")
+        selection_result = await validator.initial_selection(enhanced_text, all_candidates)
         
-        print("\n" + "=" * 60)
-        print("🎉 Test completed successfully! All structured outputs working.")
+        print(f"✅ Step 1 Complete!")
+        print(f"📊 Selected {len(selection_result.selected_codes)} codes from {len(all_candidates)} candidates")
+        
+        print(f"\n🎯 Selected codes for clinical review:")
+        for i, code in enumerate(selection_result.selected_codes[:10]):
+            print(f"   {i+1}. {code}")
+        if len(selection_result.selected_codes) > 10:
+            print(f"   ... and {len(selection_result.selected_codes) - 10} more codes")
+        
+        # Test 4: Step 2 - Clinical Refinement
+        print("\n4️⃣ Testing Step 2: Clinical Refinement...")
+        
+        refinement_result = await validator.clinical_refinement(
+            enhanced_text, 
+            selection_result.selected_codes, 
+            all_candidates
+        )
+        
+        print(f"✅ Step 2 Complete!")
+        print(f"📊 Refined to {len(refinement_result.refined_codes)} clinically relevant codes")
+        
+        print(f"\n🏆 Final Clinically Relevant Codes:")
+        for code in refinement_result.refined_codes:
+            conf_percent = code.confidence_score * 100
+            print(f"   ✓ {code.icd_code} - {conf_percent:.1f}%")
+            print(f"     Original: {code.original_description[:80]}...")
+            print(f"     Enhanced: {code.enhanced_description[:80]}...")
+            print()
+        
+        print(f"💡 Clinical Summary:")
+        print(f"   {refinement_result.clinical_summary}")
+        
+        # Test 5: Metadata Generation
+        print("\n5️⃣ Testing Metadata Generation...")
+        metadata_result = enricher.generate_metadata("Chest Pain and Diabetes")
+        
+        print(f"✅ Gender Applicability: {metadata_result.gender}")
+        print(f"✅ Keywords: {metadata_result.keywords}")
+        
+        print("\n" + "=" * 70)
+        print("🎉 NEW TWO-STEP PROCESS TEST COMPLETED SUCCESSFULLY!")
+        print("✨ Clean, Simple, and Powerful Architecture Working!")
+        
+        # Summary
+        print(f"\n📈 PROCESS SUMMARY:")
+        print(f"   📤 Input: {len(all_candidates)} vector search results")
+        print(f"   🔽 Step 1: Filtered to {len(selection_result.selected_codes)} relevant codes")
+        print(f"   🔽 Step 2: Refined to {len(refinement_result.refined_codes)} final codes")
+        print(f"   📊 Efficiency: {len(refinement_result.refined_codes)/len(all_candidates)*100:.1f}% final selection rate")
         
     except Exception as e:
         print(f"❌ Test failed: {str(e)}")
@@ -104,5 +109,28 @@ async def test_structured_outputs():
         traceback.print_exc()
 
 
+async def test_legacy_compatibility():
+    """Test that legacy /analyze endpoint still works"""
+    
+    print("\n🧪 Testing Legacy Compatibility...")
+    
+    test_text = "Patient with diabetes and heart problems"
+    
+    try:
+        vectorstore = VectorStore()
+        validator = AIValidator()
+        
+        # Legacy flow
+        candidates = vectorstore.search_all_codes(test_text, top_k=200)
+        validation_result = validator.validate_codes(test_text, candidates)
+        high_confidence = validator.get_high_confidence_codes(validation_result, 0.4)
+        
+        print(f"✅ Legacy system working: {len(high_confidence)} codes found")
+        
+    except Exception as e:
+        print(f"❌ Legacy test failed: {str(e)}")
+
+
 if __name__ == "__main__":
-    asyncio.run(test_structured_outputs()) 
+    asyncio.run(test_new_two_step_process())
+    asyncio.run(test_legacy_compatibility()) 

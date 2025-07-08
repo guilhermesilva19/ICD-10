@@ -1,57 +1,59 @@
-"""Prompt templates for AI classification and validation"""
+"""Prompt templates for AI medical coding"""
 
-CHAPTER_CLASSIFICATION_PROMPT = """
-🚨🚨🚨 LIFE-CRITICAL MEDICAL CODING TASK 🚨🚨🚨
-⚠️ CRITICAL INSTRUCTION: You MUST return EXACT chapter names from the list below with NO modifications, additions, or variations whatsoever.
-🚫 NEVER GUESS - This affects patient care and billing accuracy
-🚫 NEVER MODIFY chapter names in ANY way
 
-TASK: Analyze medical text and identify the most relevant ICD-10-CM chapter(s) for the given medical text.
+# ===== NEW: Clean Two-Step Process Prompts =====
+INITIAL_SELECTION_PROMPT = """
+🩺 MEDICAL CODE SELECTION
 
-🚫 FORBIDDEN:
-- Do NOT modify chapter names in any way
-- Do NOT add "Chapter 1:", "Chapter 2:" etc.
-- Do NOT change punctuation, spacing, or wording
-- Do NOT abbreviate or expand names
-- Do NOT add explanatory text to chapter names
+You are a medical coding expert reviewing ICD-10-CM codes for clinical documentation.
 
-✅ REQUIRED:
-- Copy chapter names EXACTLY as shown in the list
-- Use only names from the provided list
-- Return probability between 0.0 and 1.0
-- Provide brief reasoning for each match
-
-📋 EXACT CHAPTER NAMES (copy these EXACTLY):
-{chapters_list}
-
-🎯 ANALYSIS CRITERIA:
-- Primary diagnoses and conditions
-- Symptoms and clinical findings  
-- Anatomical systems involved
-- Disease processes described
-
-📊 OUTPUT REQUIREMENTS:
-🔥 PRIMARY FOCUS: Select ONE main chapter (highest relevance)
-💡 ADDITIONAL CHAPTERS: Only include additional chapters if you have STRONG CONVICTION (probability ≥ 0.7) that multiple chapters are obviously relevant
-⚠️ MAXIMUM: Return 1-3 chapters total (prefer 1, allow 2-3 only if absolutely certain)
-- Order by probability (highest first)
-- Only include chapters with probability > 0.5 for main chapter, ≥ 0.7 for additional
-- Use EXACT chapter names from the list above
-
-🎯 DECISION LOGIC:
-- If medical text clearly focuses on ONE area → Return 1 chapter
-- If medical text obviously spans multiple systems with strong evidence → Return 2-3 chapters
-- When in doubt → Return only 1 chapter (the most relevant)
-
-Medical text to analyze:
+CLINICAL DOCUMENTATION:
 {medical_text}
 
-🚨 FINAL WARNING: Copy chapter names EXACTLY as they appear in the list. Any modification will cause system failure.
-🚫 NO GUESSING ALLOWED - Only use chapters where you have HIGH CONFIDENCE
-🩺 Patient safety depends on your accuracy - BE PRECISE!
+CANDIDATE CODES:
+{candidate_codes}
+
+TASK: Select approximately 50 codes that could be medically relevant to this documentation.
+
+SELECTION CRITERIA:
+- Codes related to the medical condition described
+- Relevant symptoms, anatomy, or related conditions
+- Include potential differential diagnoses
+- Focus on clinical relevance
+
+REQUIREMENT: Return exactly the ICD codes - no descriptions, no reasoning, no confidence scores.
+Target: Approximately 50 codes for detailed clinical review.
 """
 
-VALIDATION_PROMPT = """
+CLINICAL_REFINEMENT_PROMPT = """
+🩺 CLINICAL CODE REFINEMENT & ENHANCEMENT
+
+You are a senior medical coding specialist performing clinical validation.
+
+CLINICAL DOCUMENTATION:
+{medical_text}
+
+CODES FOR REVIEW:
+{selected_codes}
+
+TASK: Remove any irrelevant codes and enhance descriptions for the remaining clinically appropriate codes.
+
+PROCESS:
+1. Remove codes that are NOT clinically relevant to this documentation
+2. For remaining relevant codes: enhance the original description for clinical clarity
+3. Assign confidence scores based on clinical appropriateness
+
+ENHANCEMENT REQUIREMENTS:
+- Improve description clarity while maintaining medical accuracy
+- Make descriptions more specific and clinically useful
+- Ensure descriptions help healthcare providers understand the relevance
+
+DELIVERABLE: Only clinically relevant codes with enhanced descriptions and confidence scores.
+"""
+
+
+# ===== KEEP: Legacy validation prompt for /analyze endpoint =====
+LEGACY_VALIDATION_PROMPT = """
 🚨🚨🚨 CRITICAL CODE VALIDATION - COMPREHENSIVE RELATED CODES 🚨🚨🚨
 
 You are an expert medical coder specializing in ICD-10-CM code validation. Your task is to find STRONGLY RELATED ICD codes for the given medical documentation.
@@ -103,7 +105,8 @@ Consider ALL types of clinical relationships:
 🩺 Focus on clinical utility - codes that would be relevant for medical decision making
 """
 
-# New prompts for spreadsheet functionality
+
+# ===== KEEP: Spreadsheet functionality prompts =====
 TITLE_ENRICHMENT_PROMPT = """
 🎯 MEDICAL TITLE ENRICHMENT FOR VECTOR SEARCH
 

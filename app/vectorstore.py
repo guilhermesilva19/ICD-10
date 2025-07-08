@@ -21,12 +21,49 @@ class VectorStore:
         )
         return response.data[0].embedding
     
-
+    def search_all_codes(self, medical_text: str, top_k: int = 450) -> list:
+        """
+        Enhanced search for ICD codes across all chapters - optimized for two-step AI process
+        
+        Args:
+            medical_text: The medical text to search for
+            top_k: Number of results to return (optimized for 400-500 range)
+            
+        Returns:
+            list: Comprehensive search results across all chapters
+        """
+        # Create embedding for the medical text
+        query_embedding = self._create_embedding(medical_text)
+        
+        # Enhanced search with higher top_k for better coverage
+        search_result = self.index.query(
+            vector=query_embedding,
+            top_k=min(top_k, 1000),  # Cap at 1000 for performance
+            include_metadata=True
+        )
+        
+        # Format results with enhanced metadata
+        formatted_results = []
+        for match in search_result.matches:
+            formatted_results.append({
+                'icd_code': match.id,
+                'score': match.score,
+                'description': match.metadata.get('description', ''),
+                'rich_text': match.metadata.get('rich_text', ''),
+                'chapter': match.metadata.get('chapter', ''),
+                'section': match.metadata.get('section', '')
+            })
+        
+        print(f"🔍 Vector search found {len(formatted_results)} codes for two-step AI processing")
+        return formatted_results
+    
+    # ===== LEGACY: Keep chapter search for backward compatibility (/analyze endpoint) =====
     
     def search_codes_by_chapter(self, medical_text: str, chapter_names: list, 
                                top_k: int = 50) -> dict:
         """
-        Search for ICD codes in specific chapters using vector similarity
+        LEGACY: Search for ICD codes in specific chapters using vector similarity
+        Kept for backward compatibility with /analyze endpoint
         
         Args:
             medical_text: The medical text to search for
@@ -43,12 +80,9 @@ class VectorStore:
         
         for chapter_name in chapter_names:
             # Use the EXACT chapter name for filtering
-            # This matches exactly what we stored in Pinecone metadata
             filter_dict = {
                 "chapter": {"$eq": chapter_name}
             }
-            
-            print(f"🔍 Searching chapter: '{chapter_name}'")  # Debug logging
             
             # Search in Pinecone with chapter filter
             search_result = self.index.query(
@@ -57,8 +91,6 @@ class VectorStore:
                 include_metadata=True,
                 filter=filter_dict
             )
-            
-            print(f"   Found {len(search_result.matches)} matches")  # Debug logging
             
             # Format results
             formatted_results = []
@@ -74,36 +106,4 @@ class VectorStore:
             
             results[chapter_name] = formatted_results
         
-        return results
-    
-    def search_all_codes(self, medical_text: str, top_k: int = 100) -> list:
-        """
-        Search for ICD codes across all chapters
-        
-        Args:
-            medical_text: The medical text to search for
-            top_k: Number of results to return
-            
-        Returns:
-            list: Search results across all chapters
-        """
-        query_embedding = self._create_embedding(medical_text)
-        
-        search_result = self.index.query(
-            vector=query_embedding,
-            top_k=top_k,
-            include_metadata=True
-        )
-        
-        formatted_results = []
-        for match in search_result.matches:
-            formatted_results.append({
-                'icd_code': match.id,
-                'score': match.score,
-                'description': match.metadata.get('description', ''),
-                'rich_text': match.metadata.get('rich_text', ''),
-                'chapter': match.metadata.get('chapter', ''),
-                'section': match.metadata.get('section', '')
-            })
-        
-        return formatted_results 
+        return results 

@@ -1,125 +1,84 @@
-"""FastAPI application for AI-powered ICD-10 medical coding"""
+"""
+🏥 AI Medical Coding System - Clean & Simple Architecture
 
-from fastapi import FastAPI, File, UploadFile, HTTPException, Request
+Enhanced medical document analysis with two-step AI validation:
+1. Direct vector search (no chapter limitations)
+2. Initial selection (~50 relevant codes)
+3. Clinical refinement (enhanced descriptions + confidence)
+"""
+
+from fastapi import FastAPI, HTTPException, File, UploadFile, Request
 from fastapi.responses import HTMLResponse
-from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-import os
-from typing import Dict, Any, List
+from fastapi.staticfiles import StaticFiles
 import asyncio
+from typing import Dict, Any, List
 
-from .document_reader import extract_text_from_file, validate_and_clean_text, extract_title_from_file
-from .chapter_classifier import ChapterClassifier
-from .vectorstore import VectorStore
-from .ai_validator import AIValidator
+from .models import SpreadsheetRow, RefinedCodeValidation
+from .document_reader import extract_title_from_file
 from .title_enricher import TitleEnricher
-from .models import SpreadsheetRow, CodeValidation
-
-
-app = FastAPI(title="ICD-10-CM Medical Coding System", version="1.0.0")
-
-# Mount static files and templates
-app.mount("/static", StaticFiles(directory="app/static"), name="static")
-templates = Jinja2Templates(directory="app/templates")
+from .ai_validator import AIValidator
+from .vectorstore import VectorStore
 
 # Initialize components
-classifier = ChapterClassifier()
-vectorstore = VectorStore()
-validator = AIValidator()
-title_enricher = TitleEnricher()
+app = FastAPI(title="AI Medical Coding System", version="2.0")
+templates = Jinja2Templates(directory="app/templates")
+app.mount("/static", StaticFiles(directory="app/static"), name="static")
 
+# Initialize AI components
+title_enricher = TitleEnricher()
+validator = AIValidator()
+vectorstore = VectorStore()
 
 @app.get("/", response_class=HTMLResponse)
 async def upload_form(request: Request):
-    """Serve the upload form"""
+    """Single document analysis interface"""
     return templates.TemplateResponse("index.html", {"request": request})
-
 
 @app.get("/spreadsheet", response_class=HTMLResponse)
 async def spreadsheet_interface(request: Request):
-    """Serve the bulk processing spreadsheet interface"""
+    """Bulk spreadsheet processing interface"""
     return templates.TemplateResponse("spreadsheet.html", {"request": request})
-
 
 @app.post("/analyze")
 async def analyze_document(file: UploadFile = File(...)) -> Dict[str, Any]:
     """
-    Main endpoint: Analyze medical document and return ICD codes
-    
-    Workflow:
-    1. Extract text from document
-    2. AI chapter classification
-    3. Vector search in relevant chapters
-    4. AI validation of candidate codes
-    5. Return high-confidence results
+    LEGACY ENDPOINT: Original single document analysis
+    Maintains backward compatibility with existing functionality
     """
     try:
-        # Step 1: Extract and validate text
+        # Extract content and title
         file_content = await file.read()
-        medical_text = extract_text_from_file(file_content, file.filename)
+        title = extract_title_from_file(file_content, file.filename)
         
-        if not medical_text:
+        if not title:
             raise HTTPException(
-                status_code=400, 
-                detail=f"Unsupported file type: {file.filename.split('.')[-1]}"
+                status_code=400,
+                detail=f"Could not extract title from file: {file.filename}"
             )
         
-        medical_text = validate_and_clean_text(medical_text)
+        # AI enrichment for better search
+        enrichment_result = title_enricher.enrich_title(title)
+        search_text = f"{title} {enrichment_result.enriched_keywords}"
         
-        # Step 2: AI Chapter Classification using structured outputs
-        chapter_classification = classifier.classify_chapters(medical_text)
+        # Direct vector search (no chapter limitations)
+        candidates = vectorstore.search_all_codes(search_text, top_k=200)
         
-        # Get chapters with probability > 0.5
-        target_chapters = classifier.get_high_probability_chapters(
-            chapter_classification, threshold=0.5
+        # Legacy validation for backward compatibility
+        validation_result = validator.validate_codes(search_text, candidates)
+        high_confidence_codes = validator.get_high_confidence_codes(
+            validation_result, threshold=0.4
         )
         
-        # Step 3: Vector search in target chapters
-        if target_chapters:
-            search_results = vectorstore.search_codes_by_chapter(
-                medical_text, target_chapters, top_k=50
-            )
-            
-            # Flatten results for validation
-            all_candidates = []
-            for chapter_results in search_results.values():
-                all_candidates.extend(chapter_results)
-        else:
-            # Fallback: search all chapters
-            all_candidates = vectorstore.search_all_codes(medical_text, top_k=100)
+        # Format response
+        diagnosis_codes = [code.icd_code for code in high_confidence_codes]
         
-        # Step 4: AI Validation using structured outputs
-        if all_candidates:
-            validation_result = validator.validate_codes(medical_text, all_candidates)
-            
-            # Get high confidence codes
-            final_codes = validator.get_high_confidence_codes(
-                validation_result, threshold=0.5
-            )
-        else:
-            validation_result = None
-            final_codes = []
-        
-        # Step 5: Return structured response
         return {
-            "chapter_predictions": [
-                {
-                    "chapter_name": pred.chapter_name,
-                    "probability": pred.probability,
-                    "reasoning": pred.reasoning
-                }
-                for pred in chapter_classification.predictions
-            ],
-            "final_codes": [
-                {
-                    "icd_code": code.icd_code,
-                    "description": code.description,
-                    "confidence_score": code.confidence_score,
-                    "reasoning": code.reasoning
-                }
-                for code in final_codes
-            ],
-            "overall_recommendation": validation_result.overall_recommendation if validation_result else "No recommendations available."
+            "title": title,
+            "enriched_keywords": enrichment_result.enriched_keywords,
+            "diagnosis_codes": diagnosis_codes,
+            "total_codes_found": len(high_confidence_codes),
+            "validation_summary": validation_result.overall_recommendation
         }
         
     except ValueError as e:
@@ -131,16 +90,14 @@ async def analyze_document(file: UploadFile = File(...)) -> Dict[str, Any]:
 @app.post("/process-spreadsheet")
 async def process_spreadsheet_document(file: UploadFile = File(...)) -> SpreadsheetRow:
     """
-    Enhanced endpoint: Process single document for comprehensive spreadsheet output
+    NEW ENHANCED ENDPOINT: Clean two-step AI validation process
     
     Workflow:
-    1. Extract title from document (first line/H1)
-    2. AI title enrichment for better vector search
-    3. AI metadata generation (gender, keywords)
-    4. Enhanced chapter classification (max 3 chapters, min 1)
-    5. Comprehensive vector search (100 codes per chapter)
-    6. AI validation for strongly related codes (~30 codes)
-    7. Return structured spreadsheet row with root/hierarchy/descriptions
+    1. Extract title and AI enrichment
+    2. Direct vector search (400-500 codes, no chapter limits)
+    3. Step 1: Initial selection (~50 relevant codes)
+    4. Step 2: Clinical refinement (enhanced descriptions + confidence)
+    5. Return structured spreadsheet row
     """
     try:
         # Step 1: Extract title
@@ -153,82 +110,57 @@ async def process_spreadsheet_document(file: UploadFile = File(...)) -> Spreadsh
                 detail=f"Could not extract title from file: {file.filename}"
             )
         
-        # Step 2: AI Title Enrichment for vector search
+        # Step 2: AI Title Enrichment for better vector search
         enrichment_result = title_enricher.enrich_title(title)
         search_text = f"{title} {enrichment_result.enriched_keywords}"
         
         # Step 3: AI Metadata Generation
         metadata_result = title_enricher.generate_metadata(title)
         
-        # Step 4: Focused Chapter Classification (1 main + 1 optional if >50%)
-        chapter_classification = classifier.classify_chapters(search_text)
-        target_chapters = classifier.get_high_probability_chapters(
-            chapter_classification, threshold=0.5, max_chapters=2
-        )
+        # Step 4: Direct Vector Search (No Chapter Limitations!)
+        # Search all codes directly - let AI decide what's relevant
+        all_candidates = vectorstore.search_all_codes(search_text, top_k=450)
         
-        # Step 5: Comprehensive vector search (100 codes per chapter)
-        all_candidates = []
-        search_results = {}
-        if target_chapters:
-            search_results = vectorstore.search_codes_by_chapter(
-                search_text, target_chapters, top_k=100
-            )
-        else:
-            # Fallback if no chapters are identified
-            all_candidates = vectorstore.search_all_codes(search_text, top_k=300)
-
-        # Step 6: AI Validation for strongly related codes (parallel processing)
-        final_codes = []
-        if search_results:
-            # Create a validation task for each chapter's results
-            validation_tasks = [
-                validator.validate_codes_async(search_text, candidates)
-                for candidates in search_results.values() if candidates
-            ]
-            
-            if validation_tasks:
-                # Run all validation tasks concurrently
-                validation_results = await asyncio.gather(*validation_tasks)
-                
-                # Collect codes with confidence >= 0.4 (40%)
-                for result in validation_results:
-                    high_confidence_codes = validator.get_high_confidence_codes(
-                        result, threshold=0.4
-                    )
-                    final_codes.extend(high_confidence_codes)
-        
-        # Handle the fallback case using the original synchronous method
-        elif all_candidates:
-            validation_result = validator.validate_codes(search_text, all_candidates)
-            final_codes = validator.get_high_confidence_codes(
-                validation_result, threshold=0.4
+        if not all_candidates:
+            raise HTTPException(
+                status_code=404,
+                detail="No relevant codes found in vector search"
             )
         
-        # Step 7: Process and structure results, ensuring uniqueness and order
-        # Use a dictionary to get unique codes, preserving the one with the highest score
-        diagnosis_codes_map = {}
-        for code in final_codes:
-            if code.icd_code not in diagnosis_codes_map or \
-               code.confidence_score > diagnosis_codes_map[code.icd_code].confidence_score:
-                diagnosis_codes_map[code.icd_code] = code
+        # Step 5: Two-Step AI Validation Process
         
-        unique_final_codes = sorted(
-            diagnosis_codes_map.values(), 
-            key=lambda x: x.confidence_score, 
-            reverse=True
+        # Step 5a: Initial Selection (~50 codes)
+        selection_result = await validator.initial_selection(search_text, all_candidates)
+        
+        if not selection_result.selected_codes:
+            raise HTTPException(
+                status_code=404,
+                detail="No codes selected in initial selection step"
+            )
+        
+        # Step 5b: Clinical Refinement (enhanced descriptions + confidence)
+        refinement_result = await validator.clinical_refinement(
+            search_text, 
+            selection_result.selected_codes, 
+            all_candidates
         )
         
-        # Step 8: Extract structured code data
-        root_codes = extract_root_codes(unique_final_codes)
-        hierarchy_codes = extract_hierarchy_codes(unique_final_codes)
-        code_descriptions = format_code_descriptions(unique_final_codes)
-        code_scores = format_code_scores(unique_final_codes)
-        diagnosis_codes = hierarchy_codes  # For backward compatibility
+        if not refinement_result.refined_codes:
+            raise HTTPException(
+                status_code=404,
+                detail="No codes validated in clinical refinement step"
+            )
         
-        # Step 9: Generate unique name (title with underscores)
+        # Step 6: Format Results for Spreadsheet Output
+        root_codes = extract_root_codes_simple(refinement_result.refined_codes)
+        hierarchy_codes = extract_hierarchy_codes_simple(refinement_result.refined_codes)
+        code_descriptions = format_enhanced_descriptions(refinement_result.refined_codes)
+        code_scores = format_confidence_scores(refinement_result.refined_codes)
+        
+        # Generate unique name
         unique_name = title.replace(" ", "_").replace(",", "").replace("(", "").replace(")", "")
         
-        # Step 10: Return enhanced spreadsheet row
+        # Step 7: Return Clean Spreadsheet Row
         return SpreadsheetRow(
             filepath=file.filename,
             title=title,
@@ -239,84 +171,48 @@ async def process_spreadsheet_document(file: UploadFile = File(...)) -> Spreadsh
             gender=metadata_result.gender,
             unique_name=unique_name,
             keywords=metadata_result.keywords,
-            diagnosis_codes=diagnosis_codes,
+            diagnosis_codes=hierarchy_codes,  # For backward compatibility
             cpt_codes="",  # Leave blank as requested
             language="English",
-            source="AI Medical Coding System",
+            source="AI Medical Coding System v2.0",
             document_type="Patient Education"
         )
         
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Spreadsheet processing failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Processing failed: {str(e)}")
 
 
-def extract_root_codes(codes: List[CodeValidation]) -> str:
-    """
-    Extract unique root codes (first 3 characters) from ICD codes
-    
-    Args:
-        codes: List of CodeValidation objects
-        
-    Returns:
-        str: Comma-separated unique root codes (e.g., "Z0, R34, F84")
-    """
+# ===== CLEAN HELPER FUNCTIONS =====
+
+def extract_root_codes_simple(codes: List[RefinedCodeValidation]) -> str:
+    """Extract unique root codes (first 3 characters)"""
     root_codes = set()
     for code in codes:
         if len(code.icd_code) >= 3:
             root_code = code.icd_code[:3]
             root_codes.add(root_code)
-    
     return ", ".join(sorted(root_codes))
 
-
-def extract_hierarchy_codes(codes: List[CodeValidation]) -> str:
-    """
-    Extract hierarchy codes only (no descriptions, no confidence)
-    
-    Args:
-        codes: List of CodeValidation objects
-        
-    Returns:
-        str: Comma-separated hierarchy codes (e.g., "Z12.344, R34.3, F84.0")
-    """
+def extract_hierarchy_codes_simple(codes: List[RefinedCodeValidation]) -> str:
+    """Extract full hierarchy codes"""
     hierarchy_codes = [code.icd_code for code in codes]
     return ", ".join(hierarchy_codes)
 
-
-def format_code_descriptions(codes: List[CodeValidation]) -> str:
-    """
-    Format code descriptions as 'CODE: Description, CODE: Description'
-    
-    Args:
-        codes: List of CodeValidation objects
-        
-    Returns:
-        str: Formatted descriptions (e.g., "Z12.44: blah blah, R34.3: another description")
-    """
+def format_enhanced_descriptions(codes: List[RefinedCodeValidation]) -> str:
+    """Format enhanced descriptions as 'CODE: Enhanced Description'"""
     descriptions = []
     for code in codes:
-        descriptions.append(f"{code.icd_code}: {code.description}")
-    
+        descriptions.append(f"{code.icd_code}: {code.enhanced_description}")
     return ", ".join(descriptions)
 
-
-def format_code_scores(codes: List[CodeValidation]) -> str:
-    """
-    Format code confidence scores as 'CODE: XX%, CODE: XX%'
-    
-    Args:
-        codes: List of CodeValidation objects
-        
-    Returns:
-        str: Formatted scores (e.g., "Z123.2: 60%, R34.3: 75%")
-    """
+def format_confidence_scores(codes: List[RefinedCodeValidation]) -> str:
+    """Format confidence scores as 'CODE: XX%'"""
     scores = []
     for code in codes:
         percentage = int(code.confidence_score * 100)
         scores.append(f"{code.icd_code}: {percentage}%")
-    
     return ", ".join(scores)
 
 
