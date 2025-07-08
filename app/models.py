@@ -2,25 +2,10 @@ from pydantic import BaseModel, Field, ConfigDict
 from typing import List
 
 
-class ChapterPrediction(BaseModel):
-    """Single chapter prediction with probability score"""
-    model_config = ConfigDict(extra='forbid')
-    
-    chapter_name: str = Field(description="Full chapter name with code range")
-    probability: float = Field(description="Probability score from 0.0 to 1.0")
-    reasoning: str = Field(description="Brief explanation why this chapter matches")
+# ChapterPrediction and ChapterClassification - DELETED
 
 
-class ChapterClassification(BaseModel):
-    """AI Chapter Classification Response"""
-    model_config = ConfigDict(extra='forbid')
-    
-    predictions: List[ChapterPrediction] = Field(
-        description="List of up to 5 chapter predictions with probability scores",
-        max_items=5
-    )
-
-
+# ===== KEEP: Original Code Validation (for backward compatibility) =====
 class CodeValidation(BaseModel):
     """Single ICD code validation result"""
     model_config = ConfigDict(extra='forbid')
@@ -32,7 +17,7 @@ class CodeValidation(BaseModel):
 
 
 class ValidationResponse(BaseModel):
-    """AI Validation Response for ICD codes"""
+    """AI Validation Response for ICD codes - KEEP for /analyze endpoint"""
     model_config = ConfigDict(extra='forbid')
     
     validated_codes: List[CodeValidation] = Field(
@@ -44,7 +29,41 @@ class ValidationResponse(BaseModel):
     )
 
 
-# New models for spreadsheet functionality
+# ===== NEW: Clean Two-Step Process Models =====
+class InitialSelectionResponse(BaseModel):
+    """Step 1: Simple code selection response"""
+    model_config = ConfigDict(extra='forbid')
+    
+    selected_codes: List[str] = Field(
+        description="List of selected ICD codes for clinical review",
+        max_items=60  # Allow flexibility around target of 50
+    )
+
+
+class RefinedCodeValidation(BaseModel):
+    """Enhanced code validation with refined descriptions"""
+    model_config = ConfigDict(extra='forbid')
+    
+    icd_code: str = Field(description="The ICD-10-CM code")
+    original_description: str = Field(description="Original official code description")
+    enhanced_description: str = Field(description="AI-enhanced, clinically clear description")
+    confidence_score: float = Field(description="Clinical confidence score from 0.0 to 1.0")
+
+
+class ClinicalRefinementResponse(BaseModel):
+    """Step 2: Clinical refinement and enhancement response"""
+    model_config = ConfigDict(extra='forbid')
+    
+    refined_codes: List[RefinedCodeValidation] = Field(
+        description="Clinically relevant codes with enhanced descriptions"
+        # NO max_items - let AI decide based on clinical relevance
+    )
+    clinical_summary: str = Field(
+        description="Summary of clinical refinement and code relevance"
+    )
+
+
+# ===== KEEP: Spreadsheet functionality models =====
 class TitleEnrichment(BaseModel):
     """AI Title Enrichment Response"""
     model_config = ConfigDict(extra='forbid')
