@@ -6,7 +6,7 @@ CHAPTER_CLASSIFICATION_PROMPT = """
 🚫 NEVER GUESS - This affects patient care and billing accuracy
 🚫 NEVER MODIFY chapter names in ANY way
 
-TASK: Analyze medical text and identify the most relevant ICD-10-CM chapters.
+TASK: Analyze medical text and identify the most relevant ICD-10-CM chapter(s) for the given medical text.
 
 🚫 FORBIDDEN:
 - Do NOT modify chapter names in any way
@@ -31,10 +31,17 @@ TASK: Analyze medical text and identify the most relevant ICD-10-CM chapters.
 - Disease processes described
 
 📊 OUTPUT REQUIREMENTS:
-- Return top 5 most relevant chapters
+🔥 PRIMARY FOCUS: Select ONE main chapter (highest relevance)
+💡 ADDITIONAL CHAPTERS: Only include additional chapters if you have STRONG CONVICTION (probability ≥ 0.7) that multiple chapters are obviously relevant
+⚠️ MAXIMUM: Return 1-3 chapters total (prefer 1, allow 2-3 only if absolutely certain)
 - Order by probability (highest first)
-- Only include chapters with probability > 0.3
+- Only include chapters with probability > 0.5 for main chapter, ≥ 0.7 for additional
 - Use EXACT chapter names from the list above
+
+🎯 DECISION LOGIC:
+- If medical text clearly focuses on ONE area → Return 1 chapter
+- If medical text obviously spans multiple systems with strong evidence → Return 2-3 chapters
+- When in doubt → Return only 1 chapter (the most relevant)
 
 Medical text to analyze:
 {medical_text}
@@ -45,49 +52,55 @@ Medical text to analyze:
 """
 
 VALIDATION_PROMPT = """
-🚨🚨🚨 CRITICAL CODE VALIDATION - PATIENT SAFETY IMPACT 🚨🚨🚨
+🚨🚨🚨 CRITICAL CODE VALIDATION - COMPREHENSIVE RELATED CODES 🚨🚨🚨
 
-You are an expert medical coder specializing in ICD-10-CM code validation. Your task is to evaluate how well specific ICD codes match the given medical documentation.
+You are an expert medical coder specializing in ICD-10-CM code validation. Your task is to find STRONGLY RELATED ICD codes for the given medical documentation.
 
+🎯 MISSION: Find approximately 30 STRONGLY RELATED codes with confidence scores proportional to their relatedness
 🚫 NEVER GUESS OR ASSUME ANYTHING
-🚫 BE EXTREMELY CONSERVATIVE WITH CONFIDENCE SCORES  
-🚫 Only give >80% confidence if evidence is CRYSTAL CLEAR
-🚫 Only give >90% confidence if evidence is OVERWHELMING
-🩺 Remember: Incorrect codes affect patient care and insurance billing
 
 Original medical text:
 {medical_text}
 
-Please evaluate each of the following ICD codes for accuracy and appropriateness:
+Please evaluate each of the following ICD codes for RELATEDNESS and appropriateness:
 
 {candidate_codes}
 
-🔍 VALIDATION CRITERIA - BE EXTREMELY STRICT:
+🔍 RELATEDNESS CRITERIA - BE COMPREHENSIVE BUT ACCURATE:
+
+CONFIDENCE SCORING :
+- 0.9-1.0: PERFECT MATCH - Exact condition described
+- 0.8-0.9: VERY STRONG RELATION - Directly related condition/symptom
+- 0.7-0.8: STRONG RELATION - Same anatomical system or related disorder
+- 0.6-0.7: GOOD RELATION - Related condition family or differential diagnosis
+- 0.5-0.6: MODERATE RELATION - Same chapter/category, related symptoms
+- 0.4-0.5: WEAK RELATION - Tangentially related, same organ system
+- 0.3-0.4: MINIMAL RELATION - Distant connection but still relevant
+- 0.0-0.3: NOT RELATED - No meaningful clinical connection
+
+🎯 TARGET OUTPUT: Return approximately 30 codes, including:
+- Direct matches (high confidence 0.8-1.0)
+- Related conditions (medium confidence 0.5-0.8) 
+- Differential diagnoses (lower confidence 0.4-0.6)
+- Same anatomical system codes (0.3-0.5)
 
 For each code, provide:
 1. The ICD-10-CM code
 2. The official description  
-3. A confidence score (0.0 to 1.0) - BE VERY CONSERVATIVE:
-   - 0.9-1.0: Perfect match with overwhelming evidence
-   - 0.8-0.9: Strong match with clear evidence  
-   - 0.7-0.8: Good match with solid evidence
-   - 0.5-0.7: Moderate match with some evidence
-   - 0.3-0.5: Weak match with minimal evidence
-   - 0.0-0.3: Poor match or insufficient evidence
-4. Clear reasoning explaining your assessment
-5. Specific evidence from the medical text
-6. Any missing information needed for higher confidence
+3. A confidence score (0.0 to 1.0) - proportional to relatedness
+4. Clear reasoning explaining the clinical relationship
+5. Specific evidence or connection to the medical text
 
-Consider:
-- Specificity and accuracy of the code
-- Completeness of documentation  
-- Clinical appropriateness
-- Coding guidelines compliance
-- Available supporting evidence
+Consider ALL types of clinical relationships:
+- Primary conditions and complications
+- Related symptoms and manifestations
+- Differential diagnoses to consider
+- Same anatomical system disorders
+- Associated conditions and comorbidities
+- Preventive care related codes
 
-🚫 CRITICAL: Only recommend codes with confidence score > 0.5
 📊 Order by confidence score (highest first)
-🚨 When in doubt, use LOWER confidence scores - patient safety first!
+🩺 Focus on clinical utility - codes that would be relevant for medical decision making
 """
 
 # New prompts for spreadsheet functionality
@@ -140,18 +153,20 @@ TASK: Generate the following metadata:
    - Include relevant anatomical terms
    - Add common symptoms or treatment terms
    - Format as comma-separated list
-   - Never include madeup words all keywords  mest be from the document
+   - Include synonyms and related terms
 
 GUIDELINES:
 - Be accurate about gender applicability
 - Focus on clinically relevant keywords
 - Include both technical and common medical terms
-- Keep keywords focused and relevant
+- Keep keywords focused and 
+- include synonyms and related terms
+- you should atleast provide 15 to 20 keywords
 
 EXAMPLE:
 Title: "Pregnancy Complications"
 Gender: Female
-Keywords: pregnancy, maternal health, prenatal care, obstetric complications, gestational disorders
+Keywords: pregnancy, maternal health, prenatal care, obstetric complications, gestational disorders ....
 
 Provide accurate and clinically appropriate metadata.
-""" 
+"""

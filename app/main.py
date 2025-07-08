@@ -5,7 +5,7 @@ from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 import os
-from typing import Dict, Any
+from typing import Dict, Any, List
 import asyncio
 
 from .document_reader import extract_text_from_file, validate_and_clean_text, extract_title_from_file
@@ -13,10 +13,10 @@ from .chapter_classifier import ChapterClassifier
 from .vectorstore import VectorStore
 from .ai_validator import AIValidator
 from .title_enricher import TitleEnricher
-from .models import SpreadsheetRow
+from .models import SpreadsheetRow, CodeValidation
 
 
-app = FastAPI(title="AI Medical Coding System", version="1.0.0")
+app = FastAPI(title="ICD-10-CM Medical Coding System", version="1.0.0")
 
 # Mount static files and templates
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
@@ -131,15 +131,16 @@ async def analyze_document(file: UploadFile = File(...)) -> Dict[str, Any]:
 @app.post("/process-spreadsheet")
 async def process_spreadsheet_document(file: UploadFile = File(...)) -> SpreadsheetRow:
     """
-    New endpoint: Process single document for spreadsheet output
+    Enhanced endpoint: Process single document for comprehensive spreadsheet output
     
     Workflow:
     1. Extract title from document (first line/H1)
     2. AI title enrichment for better vector search
     3. AI metadata generation (gender, keywords)
-    4. Vector search using enriched title
-    5. AI validation for multiple codes
-    6. Return spreadsheet row format
+    4. Enhanced chapter classification (max 3 chapters, min 1)
+    5. Comprehensive vector search (100 codes per chapter)
+    6. AI validation for strongly related codes (~30 codes)
+    7. Return structured spreadsheet row with root/hierarchy/descriptions
     """
     try:
         # Step 1: Extract title
@@ -159,24 +160,24 @@ async def process_spreadsheet_document(file: UploadFile = File(...)) -> Spreadsh
         # Step 3: AI Metadata Generation
         metadata_result = title_enricher.generate_metadata(title)
         
-        # Step 4: Enhanced Chapter Classification
+        # Step 4: Focused Chapter Classification (1 main + 1 optional if >50%)
         chapter_classification = classifier.classify_chapters(search_text)
         target_chapters = classifier.get_high_probability_chapters(
-            chapter_classification, threshold=0.3
+            chapter_classification, threshold=0.5, max_chapters=2
         )
         
-        # Step 5: Vector search to get candidates for each chapter
+        # Step 5: Comprehensive vector search (100 codes per chapter)
         all_candidates = []
         search_results = {}
         if target_chapters:
             search_results = vectorstore.search_codes_by_chapter(
-                search_text, target_chapters, top_k=30
+                search_text, target_chapters, top_k=100
             )
         else:
             # Fallback if no chapters are identified
-            all_candidates = vectorstore.search_all_codes(search_text, top_k=150)
+            all_candidates = vectorstore.search_all_codes(search_text, top_k=300)
 
-        # Step 6: AI Validation in parallel for each chapter
+        # Step 6: AI Validation for strongly related codes (parallel processing)
         final_codes = []
         if search_results:
             # Create a validation task for each chapter's results
@@ -189,10 +190,10 @@ async def process_spreadsheet_document(file: UploadFile = File(...)) -> Spreadsh
                 # Run all validation tasks concurrently
                 validation_results = await asyncio.gather(*validation_tasks)
                 
-                # Collect high-confidence codes from all results
+                # Collect codes with confidence >= 0.4 (40%)
                 for result in validation_results:
                     high_confidence_codes = validator.get_high_confidence_codes(
-                        result, threshold=0.3
+                        result, threshold=0.4
                     )
                     final_codes.extend(high_confidence_codes)
         
@@ -200,10 +201,10 @@ async def process_spreadsheet_document(file: UploadFile = File(...)) -> Spreadsh
         elif all_candidates:
             validation_result = validator.validate_codes(search_text, all_candidates)
             final_codes = validator.get_high_confidence_codes(
-                validation_result, threshold=0.45
+                validation_result, threshold=0.4
             )
         
-        # Step 7: Format diagnosis codes, ensuring uniqueness and order
+        # Step 7: Process and structure results, ensuring uniqueness and order
         # Use a dictionary to get unique codes, preserving the one with the highest score
         diagnosis_codes_map = {}
         for code in final_codes:
@@ -217,15 +218,24 @@ async def process_spreadsheet_document(file: UploadFile = File(...)) -> Spreadsh
             reverse=True
         )
         
-        diagnosis_codes = ", ".join([code.icd_code for code in unique_final_codes])
+        # Step 8: Extract structured code data
+        root_codes = extract_root_codes(unique_final_codes)
+        hierarchy_codes = extract_hierarchy_codes(unique_final_codes)
+        code_descriptions = format_code_descriptions(unique_final_codes)
+        code_scores = format_code_scores(unique_final_codes)
+        diagnosis_codes = hierarchy_codes  # For backward compatibility
         
-        # Step 8: Generate unique name (title with underscores)
+        # Step 9: Generate unique name (title with underscores)
         unique_name = title.replace(" ", "_").replace(",", "").replace("(", "").replace(")", "")
         
-        # Step 9: Return spreadsheet row
+        # Step 10: Return enhanced spreadsheet row
         return SpreadsheetRow(
             filepath=file.filename,
             title=title,
+            icd_code_root=root_codes,
+            icd_code_hierarchy=hierarchy_codes,
+            details_description=code_descriptions,
+            details_score=code_scores,
             gender=metadata_result.gender,
             unique_name=unique_name,
             keywords=metadata_result.keywords,
@@ -240,6 +250,74 @@ async def process_spreadsheet_document(file: UploadFile = File(...)) -> Spreadsh
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Spreadsheet processing failed: {str(e)}")
+
+
+def extract_root_codes(codes: List[CodeValidation]) -> str:
+    """
+    Extract unique root codes (first 3 characters) from ICD codes
+    
+    Args:
+        codes: List of CodeValidation objects
+        
+    Returns:
+        str: Comma-separated unique root codes (e.g., "Z0, R34, F84")
+    """
+    root_codes = set()
+    for code in codes:
+        if len(code.icd_code) >= 3:
+            root_code = code.icd_code[:3]
+            root_codes.add(root_code)
+    
+    return ", ".join(sorted(root_codes))
+
+
+def extract_hierarchy_codes(codes: List[CodeValidation]) -> str:
+    """
+    Extract hierarchy codes only (no descriptions, no confidence)
+    
+    Args:
+        codes: List of CodeValidation objects
+        
+    Returns:
+        str: Comma-separated hierarchy codes (e.g., "Z12.344, R34.3, F84.0")
+    """
+    hierarchy_codes = [code.icd_code for code in codes]
+    return ", ".join(hierarchy_codes)
+
+
+def format_code_descriptions(codes: List[CodeValidation]) -> str:
+    """
+    Format code descriptions as 'CODE: Description, CODE: Description'
+    
+    Args:
+        codes: List of CodeValidation objects
+        
+    Returns:
+        str: Formatted descriptions (e.g., "Z12.44: blah blah, R34.3: another description")
+    """
+    descriptions = []
+    for code in codes:
+        descriptions.append(f"{code.icd_code}: {code.description}")
+    
+    return ", ".join(descriptions)
+
+
+def format_code_scores(codes: List[CodeValidation]) -> str:
+    """
+    Format code confidence scores as 'CODE: XX%, CODE: XX%'
+    
+    Args:
+        codes: List of CodeValidation objects
+        
+    Returns:
+        str: Formatted scores (e.g., "Z123.2: 60%, R34.3: 75%")
+    """
+    scores = []
+    for code in codes:
+        percentage = int(code.confidence_score * 100)
+        scores.append(f"{code.icd_code}: {percentage}%")
+    
+    return ", ".join(scores)
 
 
 if __name__ == "__main__":
