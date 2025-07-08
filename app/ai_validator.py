@@ -39,7 +39,7 @@ class AIValidator:
         
         return "\n".join(formatted)
 
-    # ===== NEW: Clean Two-Step Process Methods =====
+    # ===== Clean Two-Step Process Methods =====
     
     async def initial_selection(self, medical_text: str, candidate_codes: list) -> InitialSelectionResponse:
         """
@@ -125,83 +125,7 @@ class AIValidator:
                 clinical_summary=f"Clinical refinement failed: {e}"
             )
 
-    # ===== KEEP: Legacy methods for backward compatibility (/analyze endpoint) =====
-    
-    def validate_codes(self, medical_text: str, candidate_codes: list) -> ValidationResponse:
-        """
-        LEGACY: Synchronously validates a list of candidate codes.
-        Used by the original /analyze endpoint.
-        """
-        if not candidate_codes:
-            return ValidationResponse(validated_codes=[], overall_recommendation="No candidates provided.")
 
-        formatted_codes = self._format_candidate_codes(candidate_codes)
-        prompt = LEGACY_VALIDATION_PROMPT.format(
-            medical_text=medical_text,
-            candidate_codes=formatted_codes
-        )
-        
-        completion = self.client.chat.completions.create(
-            model=self.model,
-            messages=[
-                {"role": "system", "content": "🚨 CRITICAL CODE VALIDATION 🚨 You are an expert medical coder. Your task is to evaluate how well ICD codes match the documentation."},
-                {"role": "user", "content": prompt}
-            ],
-            response_format={
-                "type": "json_schema",
-                "json_schema": {
-                    "name": "code_validation",
-                    "strict": True,
-                    "schema": ValidationResponse.model_json_schema()
-                }
-            },
-            temperature=0.2,
-            top_p=0.1
-        )
-        
-        try:
-            result_json = json.loads(completion.choices[0].message.content)
-            return ValidationResponse(**result_json)
-        except (json.JSONDecodeError, ValidationError) as e:
-            raise ValueError(f"Failed to parse OpenAI validation response: {e}")
-
-    async def validate_codes_async(self, medical_text: str, candidate_codes: list) -> ValidationResponse:
-        """
-        LEGACY: Asynchronously validates a list of candidate codes.
-        Used for parallel processing in the old /process-spreadsheet endpoint.
-        """
-        if not candidate_codes:
-            return ValidationResponse(validated_codes=[], overall_recommendation="No candidates provided.")
-
-        formatted_codes = self._format_candidate_codes(candidate_codes)
-        prompt = LEGACY_VALIDATION_PROMPT.format(
-            medical_text=medical_text,
-            candidate_codes=formatted_codes
-        )
-
-        try:
-            completion = await self.async_client.chat.completions.create(
-                model=self.model,
-                messages=[
-                    {"role": "system", "content": "🚨 CRITICAL CODE VALIDATION 🚨 You are an expert medical coder. Your task is to evaluate how well ICD codes match the documentation."},
-                    {"role": "user", "content": prompt}
-                ],
-                response_format={
-                    "type": "json_schema",
-                    "json_schema": {
-                        "name": "code_validation",
-                        "strict": True,
-                        "schema": ValidationResponse.model_json_schema()
-                    }
-                },
-                temperature=0.2,
-                top_p=0.1
-            )
-            result_json = json.loads(completion.choices[0].message.content)
-            return ValidationResponse(**result_json)
-        except Exception as e:
-            print(f"Error during async validation: {e}")
-            return ValidationResponse(validated_codes=[], overall_recommendation=f"API call failed: {e}")
 
     def get_high_confidence_codes(self, validation_result: ValidationResponse, 
                                     threshold: float = 0.5) -> list[CodeValidation]:

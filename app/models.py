@@ -2,10 +2,7 @@ from pydantic import BaseModel, Field, ConfigDict
 from typing import List
 
 
-# ChapterPrediction and ChapterClassification - DELETED
-
-
-# ===== KEEP: Original Code Validation (for backward compatibility) =====
+# ==== Code Validation (for backward compatibility) =====
 class CodeValidation(BaseModel):
     """Single ICD code validation result"""
     model_config = ConfigDict(extra='forbid')
@@ -29,7 +26,6 @@ class ValidationResponse(BaseModel):
     )
 
 
-# ===== NEW: Clean Two-Step Process Models =====
 class InitialSelectionResponse(BaseModel):
     """Step 1: Simple code selection response"""
     model_config = ConfigDict(extra='forbid')
@@ -56,14 +52,13 @@ class ClinicalRefinementResponse(BaseModel):
     
     refined_codes: List[RefinedCodeValidation] = Field(
         description="Clinically relevant codes with enhanced descriptions"
-        # NO max_items - let AI decide based on clinical relevance
     )
     clinical_summary: str = Field(
         description="Summary of clinical refinement and code relevance"
     )
 
 
-# ===== KEEP: Spreadsheet functionality models =====
+# == Spreadsheet functionality models =====
 class TitleEnrichment(BaseModel):
     """AI Title Enrichment Response"""
     model_config = ConfigDict(extra='forbid')
@@ -89,7 +84,6 @@ class SpreadsheetRow(BaseModel):
     icd_code_hierarchy: str = Field(description="Full hierarchy codes only: Z12.344, R34.3, F84.0")
     details_description: str = Field(description="Code with descriptions: Z12.44: blah blah, R34.3: another description")
     details_score: str = Field(description="Code with confidence: Z123.2: 60%, R34.3: 75%")
-    # Keep existing fields for backward compatibility and other data
     gender: str = ""
     unique_name: str = ""
     keywords: str = ""
