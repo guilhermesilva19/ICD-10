@@ -22,7 +22,7 @@ class VectorStore:
         )
         return response.data[0].embedding
     
-    def search_all_codes(self, medical_text: str, top_k: int = 450) -> list:
+    def search_all_codes(self, medical_text: str, top_k: int = 150) -> list:
         """
         Enhanced search for ICD codes across all chapters - optimized for two-step AI process
         
