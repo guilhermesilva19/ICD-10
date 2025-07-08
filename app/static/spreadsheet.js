@@ -211,7 +211,9 @@ class DataProcessor {
             status: 'completed',
             // Keep for backward compatibility
             diagnosis_codes: rawResult.diagnosis_codes || rawResult.icd_code_hierarchy || '',
-            cpt_codes: rawResult.cpt_codes || ''
+            cpt_codes: rawResult.cpt_codes || '',
+            // 🎯 CRITICAL: Include structured data for enhanced exports
+            icd_codes_structured: rawResult.icd_codes_structured || []
         };
     }
 
@@ -270,62 +272,6 @@ class TableRenderer {
 }
 
 class ExportManager {
-    static parseICDCodes(row) {
-        const codes = [];
-        
-        // Parse hierarchy codes (main source of truth)
-        const hierarchyCodes = row.icd_code_hierarchy ? row.icd_code_hierarchy.split(',').map(c => c.trim()) : [];
-        
-        // Parse descriptions (format: "CODE: Description, CODE: Description")
-        const descriptions = {};
-        if (row.details_description) {
-            const descMatches = row.details_description.match(/([A-Z]\d+(?:\.\d+)?)\s*:\s*([^,]+(?:,(?![A-Z]\d+)[^,]*)*)/g);
-            if (descMatches) {
-                descMatches.forEach(match => {
-                    const [, code, desc] = match.match(/([A-Z]\d+(?:\.\d+)?)\s*:\s*(.+)/);
-                    descriptions[code.trim()] = desc.trim();
-                });
-            }
-        }
-        
-        // Parse confidence scores (format: "CODE: XX%, CODE: XX%")
-        const scores = {};
-        if (row.details_score) {
-            const scoreMatches = row.details_score.match(/([A-Z]\d+(?:\.\d+)?)\s*:\s*(\d+%)/g);
-            if (scoreMatches) {
-                scoreMatches.forEach(match => {
-                    const [, code, score] = match.match(/([A-Z]\d+(?:\.\d+)?)\s*:\s*(\d+%)/);
-                    scores[code.trim()] = score.trim();
-                });
-            }
-        }
-        
-        // Combine all data for each code
-        hierarchyCodes.forEach(code => {
-            if (code) {
-                const rootCode = code.substring(0, 3); // First 3 characters
-                const confidenceNum = parseInt(scores[code]?.replace('%', '') || '0');
-                
-                codes.push({
-                    document_path: row.filepath,
-                    document_title: row.title,
-                    document_gender: row.gender,
-                    document_keywords: row.keywords,
-                    icd_code: code,
-                    root_code: rootCode,
-                    code_chapter: ExportManager.getICDChapter(rootCode),
-                    enhanced_description: descriptions[code] || 'Description not available',
-                    confidence_score: scores[code] || '0%',
-                    confidence_numeric: confidenceNum,
-                    confidence_level: ExportManager.getConfidenceLevel(confidenceNum),
-                    document_language: row.language,
-                    document_status: row.status
-                });
-            }
-        });
-        
-        return codes;
-    }
 
     // 🏷️ ICD Chapter Mapping
     static getICDChapter(rootCode) {
@@ -495,15 +441,46 @@ class ExportManager {
     }
 
     static exportAsExcel(data) {
+        console.log('🚀 Starting Multi-Sheet Export...');
         
-        // 🎯 STEP 1: Parse all data into individual codes
+        // 🔍 DEBUG: Let's see what we're actually getting
+        console.log('🔍 DEBUGGING DATA STRUCTURE:');
+        console.log('Total rows:', data.length);
+        if (data.length > 0) {
+            console.log('First row keys:', Object.keys(data[0]));
+            console.log('First row icd_codes_structured:', data[0].icd_codes_structured);
+            console.log('Type of icd_codes_structured:', typeof data[0].icd_codes_structured);
+            if (data[0].icd_codes_structured) {
+                console.log('Length of structured codes:', data[0].icd_codes_structured.length);
+            }
+        }
+        
+        // 🎯 STEP 1: Extract individual codes from structured data
         const allCodes = [];
         data.forEach(row => {
-            const parsedCodes = ExportManager.parseICDCodes(row);
-            allCodes.push(...parsedCodes);
+            if (row.icd_codes_structured && row.icd_codes_structured.length > 0) {
+                // Use structured data (perfect quality)
+                row.icd_codes_structured.forEach(code => {
+                    allCodes.push({
+                        document_path: row.filepath,
+                        document_title: row.title,
+                        document_gender: row.gender,
+                        document_keywords: row.keywords,
+                        icd_code: code.icd_code,
+                        root_code: code.root_code,
+                        code_chapter: ExportManager.getICDChapter(code.root_code),
+                        enhanced_description: code.enhanced_description,
+                        confidence_score: code.confidence_percentage,
+                        confidence_numeric: Math.round(code.confidence_score * 100),
+                        confidence_level: ExportManager.getConfidenceLevel(Math.round(code.confidence_score * 100)),
+                        document_language: row.language,
+                        document_status: row.status
+                    });
+                });
+            }
         });
         
-        console.log(`✨ Parsed ${allCodes.length} individual ICD codes from ${data.length} documents`);
+        console.log(`✨ Extracted ${allCodes.length} individual ICD codes from ${data.length} documents`);
         
         // 🎯 STEP 2: Generate Analytics
         const analytics = ExportManager.generateAnalytics(allCodes);
