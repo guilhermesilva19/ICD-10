@@ -41,23 +41,23 @@ class TableRenderer {
             <td class="col-filepath">${result.filepath}</td>
             <td class="col-title">${result.title}</td>
             <td class="col-gender">${genderBadge}</td>
-            <td>${result.unique_name}</td>
+            <td class="col-unique-name">${result.unique_name}</td>
             <td class="col-keywords">${result.keywords}</td>
             <td class="col-icd-root">${result.icd_code_root}</td>
             <td class="col-icd-hierarchy">${result.icd_code_hierarchy}</td>
-            <td class="col-details-description" style="max-width: 400px; word-wrap: break-word;">${result.details_description}</td>
-            <td class="col-details-score" style="max-width: 300px; word-wrap: break-word;">${result.details_score}</td>
+            <td class="col-details-description">${result.details_description}</td>
+            <td class="col-details-score">${result.details_score}</td>
             <td class="col-language">${result.language}</td>
-            <td>${statusIcon} ${result.status}</td>
+            <td class="col-status">${statusIcon} ${result.status}</td>
         `;
     }
 
     static createPlaceholderRow(filename) {
         return `
             <td class="col-filepath">${filename}</td>
-            <td colspan="10" style="color: var(--warning-color);">
+            <td colspan="10" style="color: var(--warning-color); padding: 20px; text-align: center;">
                 <div class="spinner" style="display: inline-block; vertical-align: middle; margin-right: 8px;"></div>
-                Processing...
+                <span style="font-size: 0.9rem; font-weight: 500;">Waiting to process...</span>
             </td>
         `;
     }
@@ -65,11 +65,11 @@ class TableRenderer {
     static createProcessingRow(filename) {
         return `
             <td class="col-filepath">${filename}</td>
-            <td colspan="9" style="color: var(--warning-color);">
+            <td colspan="9" style="color: var(--warning-color); padding: 20px; text-align: center;">
                 <div class="spinner" style="display: inline-block; vertical-align: middle; margin-right: 8px;"></div>
-                Processing...
+                <span style="font-size: 0.9rem; font-weight: 500;">Processing document...</span>
             </td>
-            <td><i class="fas fa-cogs status-processing"></i> Processing</td>
+            <td class="col-status"><i class="fas fa-cogs status-processing"></i> Processing</td>
         `;
     }
 }
