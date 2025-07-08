@@ -3,9 +3,9 @@
 
 # ===== Clean Two-Step Process Prompts =====
 INITIAL_SELECTION_PROMPT = """
-🩺 MEDICAL CODE SELECTION
+🩺 PRIMARY CONDITION IDENTIFICATION - STRICT MEDICAL FOCUS
 
-You are a medical coding expert reviewing ICD-10-CM codes for clinical documentation.
+You are a senior medical coding specialist. Your CRITICAL task is to identify ONLY the PRIMARY medical conditions and select the MINIMUM relevant codes.
 
 CLINICAL DOCUMENTATION:
 {medical_text}
@@ -13,42 +13,59 @@ CLINICAL DOCUMENTATION:
 CANDIDATE CODES:
 {candidate_codes}
 
-TASK: Select approximately 50 codes that could be medically relevant to this documentation.
+🚨 STRICT REQUIREMENTS - FOLLOW EXACTLY:
+🎯 Select 15-50 codes total
+🎯 Focus on THE PRIMARY medical condition only
+🎯 Choose 1-2 root code families maximum (e.g., ONLY F32/F33 for depression) or if you strongly believe the term includes mor than 2 include upto 4
+🚫 include secondary, related, or differential diagnosis codes
+🚫 DO NOT cast a wide net - be surgically precise
 
-SELECTION CRITERIA:
-- Codes related to the medical condition described
-- Relevant symptoms, anatomy, or related conditions
-- Include potential differential diagnoses
-- Focus on clinical relevance
 
-REQUIREMENT: Return exactly the ICD codes - no descriptions, no reasoning, no confidence scores.
-Target: Approximately 50 codes for detailed clinical review.
+TARGET: 15-50 codes representing ONLY those PRIMARY conditions
+AVOID: Comprehensive coverage, differential diagnosis, related conditions
+
+CRITICAL: Count your selections. If over 25 codes, remove the least relevant ones.
 """
 
 CLINICAL_REFINEMENT_PROMPT = """
-🩺 CLINICAL CODE REFINEMENT & ENHANCEMENT
+🩺 CLINICAL CODE ENHANCEMENT & VALIDATION
 
-You are a senior medical coding specialist performing clinical validation.
+You are a senior medical coding specialist performing final validation and enhancement of pre-selected relevant codes.
 
 CLINICAL DOCUMENTATION:
 {medical_text}
 
-CODES FOR REVIEW:
+PRE-SELECTED CODES FOR ENHANCEMENT:
 {selected_codes}
 
-TASK: Remove any irrelevant codes and enhance descriptions for the remaining clinically appropriate codes.
+IMPORTANT CONTEXT:
+- These codes have already been pre-filtered for relevance to the primary medical condition
+- Related hierarchy codes have been intentionally added for completeness
+- Your goal is to make sure irrelevant codes are not introduced during enrichemnt by removing them out 
 
-PROCESS:
-1. Remove codes that are NOT clinically relevant to this documentation
-2. For remaining relevant codes: enhance the original description for clinical clarity
-3. Assign confidence scores based on clinical appropriateness
+REFINED TASK:
+1. KEEP most codes that are clinically relevant to the documentation
+2. Remove ONLY codes that are clearly unrelated or inappropriate
+3. PRESERVE multiple similar codes within the same condition family 
+4. Enhance descriptions to improve clinical clarity and usefulness
+
+INCLUSION GUIDELINES:
+✅ KEEP codes representing different severities of the same condition
+✅ KEEP codes representing different episodes or variations  
+✅ KEEP codes within the primary medical condition family
+✅ KEEP codes that could be relevant for comprehensive documentation
+🚫 Remove  codes that are clearly unrelated to the primary condition
+
+TARGET: Aim to retain  codes from the pre-selected set
+FOCUS: Enhancement of descriptions + confidence scoring
 
 ENHANCEMENT REQUIREMENTS:
 - Improve description clarity while maintaining medical accuracy
-- Make descriptions more specific and clinically useful
-- Ensure descriptions help healthcare providers understand the relevance
+- Make descriptions more clinically specific and actionable
+- Add context about when this code would be most appropriate
+- Assign confidence scores based on clinical relevance to the documentation
 
-DELIVERABLE: Only clinically relevant codes with enhanced descriptions and confidence scores.
+DELIVERABLE: Enhanced codes with improved descriptions and confidence scores, preserving medical completeness.
 """
 
 

@@ -1,8 +1,6 @@
 """
-🏥 AI Medical Coding System - Clean & Simple Architecture
-
-Enhanced medical document analysis with two-step AI validation:
-1. Direct vector search (no chapter limitations)
+🏥 AI Medical Coding System 
+1. vector search 
 2. Initial selection (~50 relevant codes)
 3. Clinical refinement (enhanced descriptions + confidence)
 """
@@ -71,22 +69,13 @@ async def analyze_document(file: UploadFile = File(...)) -> Dict[str, Any]:
                 detail="No relevant codes found"
             )
         
-        # Step 4: Two-Step AI Validation Process
+        # Step 4: Enhanced Multi-Stage AI Validation Process
         
-        # Step 4a: Initial Selection (~50 codes)
-        selection_result = await validator.initial_selection(search_text, all_candidates)
-        
-        if not selection_result.selected_codes:
-            raise HTTPException(
-                status_code=404,
-                detail="No relevant codes identified"
-            )
-        
-        # Step 4b: Clinical Refinement (enhanced descriptions + confidence)
-        refinement_result = await validator.clinical_refinement(
-            search_text, 
-            selection_result.selected_codes, 
-            all_candidates
+        # NEW: Enhanced multi-stage process with hierarchy enrichment
+        refinement_result = await validator.enhanced_multi_stage_validation(
+            medical_text=search_text,
+            initial_candidates=all_candidates,
+            vectorstore=vectorstore
         )
         
         if not refinement_result.refined_codes:
@@ -169,22 +158,13 @@ async def process_spreadsheet_document(file: UploadFile = File(...)) -> Spreadsh
                 detail="No relevant codes found in vector search"
             )
         
-        # Step 7: Two-Step AI Validation Process
+        # Step 7: Enhanced Multi-Stage AI Validation Process
         
-        # Step 7a: Initial Selection (~50 codes)
-        selection_result = await validator.initial_selection(search_text, all_candidates)
-        
-        if not selection_result.selected_codes:
-            raise HTTPException(
-                status_code=404,
-                detail="No codes selected in initial selection step"
-            )
-        
-        # Step 7b: Clinical Refinement (enhanced descriptions + confidence)
-        refinement_result = await validator.clinical_refinement(
-            search_text, 
-            selection_result.selected_codes, 
-            all_candidates
+        # NEW: Enhanced multi-stage process with hierarchy enrichment
+        refinement_result = await validator.enhanced_multi_stage_validation(
+            medical_text=search_text,
+            initial_candidates=all_candidates,
+            vectorstore=vectorstore
         )
         
         if not refinement_result.refined_codes:
@@ -214,7 +194,7 @@ async def process_spreadsheet_document(file: UploadFile = File(...)) -> Spreadsh
             unique_name=unique_name,
             keywords=metadata_result.keywords,
             diagnosis_codes=hierarchy_codes,  # For backward compatibility
-            cpt_codes="",  # Leave blank as requested
+            cpt_codes="",  # Leave 
             language="English",
             source="AI Medical Coding System v2.0",
             document_type="Patient Education"
@@ -226,7 +206,7 @@ async def process_spreadsheet_document(file: UploadFile = File(...)) -> Spreadsh
         raise HTTPException(status_code=500, detail=f"Processing failed: {str(e)}")
 
 
-# ===== CLEAN HELPER FUNCTIONS =====
+# =====  HELPER FUNCTIONS =====
 
 def extract_root_codes_simple(codes: List[RefinedCodeValidation]) -> str:
     """Extract unique root codes (first 3 characters)"""
