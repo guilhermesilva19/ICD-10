@@ -66,7 +66,7 @@ class SpreadsheetRow(BaseModel):
     cpt_codes: str = ""
     language: str = "English"
     source: str = "AI Medical Coding System"
-    document_type: str = "Patient Education"
+    document_type: str = "Patient Education" 
     
     # NEW: Optional structured data for enhanced export capabilities
     icd_codes_structured: Optional[List[Dict[str, Any]]] = Field(

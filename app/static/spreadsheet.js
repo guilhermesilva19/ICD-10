@@ -158,14 +158,14 @@ class FileTreeProcessor {
             
             if (this.supportedTypes.includes(extension)) {
                             const filePath = file.webkitRelativePath || file.zipPath || file.name;
-            const fileInfo = {
-                file: file,
-                name: file.name,
-                size: file.size,
+                const fileInfo = {
+                    file: file,
+                    name: file.name,
+                    size: file.size,
                 relativePath: filePath,
                 folderDepth: this.calculateFolderDepth(filePath),
                 parentFolder: this.extractParentFolder(filePath)
-            };
+                };
                 processedFiles.push(fileInfo);
             }
         }
@@ -588,7 +588,7 @@ class ExportManager {
         analyticsSheet['!cols'] = [
             { wch: 20 }, { wch: 35 }, { wch: 25 }
         ];
-        
+
         XLSX.utils.book_append_sheet(workbook, analyticsSheet, 'Analytics');
         
         // 🎯 Enhanced metadata
@@ -931,7 +931,7 @@ class SpreadsheetProcessor {
             this.handleZipSelection(fakeEvent);
         } else {
             // Handle as regular files
-            this.addFiles(droppedFiles);
+        this.addFiles(droppedFiles);
         }
     }
 
