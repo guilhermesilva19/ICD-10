@@ -123,8 +123,13 @@ TASK: Generate the following metadata by analyzing BOTH the title and full docum
    - Include relevant anatomical terms
    - Add symptoms, treatments, procedures
    - Include diagnostic terms and medical conditions
-   - Include other relevant  medical keywords and synonyms
-   - Add relevant medical specialties and care areas
+   - **EXPAND KEYWORDS FOR COMPREHENSIVE COVERAGE:**
+     * Include ACRONYMS and their full forms (e.g., "COPD, chronic obstructive pulmonary disease")
+     * Add SYNONYMS and alternative medical terms
+     * Include LAYMAN TERMS and common patient language (e.g., "heart attack" for "myocardial infarction")
+     * Add related medical specialties and care areas
+     * Include brand names and generic drug names where applicable
+     * Add procedure variations (minimally invasive, open, laparoscopic, etc.)
    - Format as comma-separated list
    - Include synonyms and related terms
    - Focus on terms that would help in medical coding and search
@@ -136,8 +141,9 @@ GUIDELINES:
 - Include both technical and common medical terms found in content and other relavant keywords too that might not be mentioned int he document
 - Extract procedure names, medication categories, and treatment approaches
 - Include anatomical terms and body systems mentioned
-- You should provide at least 15-35 comprehensive keywords
+- You should provide at least 20-40 comprehensive keywords (increased to accommodate expansions)
 - Prioritize terms that appear in or relate to the document content
+- **EXAMPLE:** For "diabetes" include: "diabetes, DM, diabetes mellitus, diabetic, high blood sugar, hyperglycemia, insulin resistance"
 
 Provide accurate and clinically appropriate metadata based on the complete document analysis.
 """
