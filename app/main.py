@@ -1,10 +1,6 @@
-"""
-🏥 AI Medical Coding System 
-1. vector search 
-2. Initial selection (~50 relevant codes)
-3. Clinical refinement (enhanced descriptions + confidence)
-"""
+"""Medical coding system with deterministic processing and official ICD validation."""
 
+import logging
 from fastapi import FastAPI, HTTPException, File, UploadFile, Request
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
@@ -12,84 +8,81 @@ from fastapi.staticfiles import StaticFiles
 from typing import Dict, Any, List
 
 from .models import SpreadsheetRow, RefinedCodeValidation
-from .document_reader import extract_title_from_file, extract_text_from_file
-from .title_enricher import TitleEnricher
-from .ai_validator import AIValidator
-from .vectorstore import VectorStore
+from .document_reader import extract_title_from_file, extract_text_from_file, extract_first_page_content
+from .medical_engine import MedicalCodingEngine
+from .metadata_generator import MetadataGenerator
 
-# Initialize components
-app = FastAPI(title="AI Medical Coding System", version="2.0")
-templates = Jinja2Templates(directory="app/templates")
+# Configure professional logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.StreamHandler(),
+    ]
+)
+logger = logging.getLogger(__name__)
+
+# Initialize FastAPI
+app = FastAPI(title="Medical Coding System", version="3.0.0")
+templates = Jinja2Templates(directory="app/templates") 
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 
-# Initialize AI components
-title_enricher = TitleEnricher()
-validator = AIValidator()
-vectorstore = VectorStore()
+# Initialize components with logging
+logger.info("Initializing medical coding system components...")
+try:
+    coding_engine = MedicalCodingEngine()
+    metadata_generator = MetadataGenerator()
+    logger.info("All system components initialized successfully")
+except Exception as e:
+    logger.error(f"Failed to initialize components: {e}")
+    raise
 
 @app.get("/", response_class=HTMLResponse)
 async def upload_form(request: Request):
-    """Single document analysis interface"""
+    """Single document analysis interface."""
     return templates.TemplateResponse("index.html", {"request": request})
 
 @app.get("/spreadsheet", response_class=HTMLResponse)
 async def spreadsheet_interface(request: Request):
-    """Bulk spreadsheet processing interface"""
+    """Bulk spreadsheet processing interface."""
     return templates.TemplateResponse("spreadsheet.html", {"request": request})
 
 @app.post("/analyze")
 async def analyze_document(file: UploadFile = File(...)) -> Dict[str, Any]:
-    """
-    Same two-step AI process as spreadsheet but simplified for single documents
-    """
+    """Analyze single document - preserving exact response format."""
     try:
-        # Step 1: Extract clean filename (strip any path)
-        clean_filename = file.filename.split('/')[-1] if '/' in file.filename else file.filename
+        logger.info(f"Processing single document analysis for: {file.filename}")
         
-        # Step 2: Extract title
+        # Extract document data
+        clean_filename = file.filename.split('/')[-1] if '/' in file.filename else file.filename
         file_content = await file.read()
         title = extract_title_from_file(file_content, clean_filename)
         
         if not title:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Could not extract title from file: {clean_filename}"
-            )
+            logger.warning(f"Failed to extract title from file: {clean_filename}")
+            raise HTTPException(status_code=400, detail=f"Could not extract title from file: {clean_filename}")
         
-        # Step 2: AI Title Enrichment
-        enrichment_result = title_enricher.enrich_title(title)
-        search_text = f"{title} {enrichment_result.enriched_keywords}"
+        # Enhanced vector search - title + first page content for better semantic matching
+        first_page_content = extract_first_page_content(file_content, clean_filename)
+        if first_page_content:
+            search_text = f"{title} {first_page_content}"
+            logger.info(f"Using enhanced search with first page content: {len(search_text)} chars")
+        else:
+            search_text = f"{title} {title}"
+            logger.info(f"Fallback to title duplication - first page extraction failed")
         
-        # Step 3: Direct Vector Search (No Chapter Limitations!)
-        all_candidates = vectorstore.search_all_codes(search_text, top_k=450)
+        # Extract codes using new engine
+        coding_result = await coding_engine.extract_codes_for_spreadsheet(title, search_text)
         
-        if not all_candidates:
-            raise HTTPException(
-                status_code=404,
-                detail="No relevant codes found"
-            )
+        if not coding_result.refined_codes:
+            logger.warning("No codes validated after analysis")
+            raise HTTPException(status_code=404, detail="No codes validated after clinical review")
         
-        # Step 4: Enhanced Multi-Stage AI Validation Process
+        # Format response - exact same format as before
+        diagnosis_codes = [code.icd_code for code in coding_result.refined_codes]
         
-        # NEW: Enhanced multi-stage process with hierarchy enrichment
-        refinement_result = await validator.enhanced_multi_stage_validation(
-            medical_text=search_text,
-            initial_candidates=all_candidates,
-            vectorstore=vectorstore
-        )
-        
-        if not refinement_result.refined_codes:
-            raise HTTPException(
-                status_code=404,
-                detail="No codes validated after clinical review"
-            )
-        
-        # Step 5: Format Clean Response
-        diagnosis_codes = [code.icd_code for code in refinement_result.refined_codes]
-        
-        # Enhanced code details
         code_details = []
-        for code in refinement_result.refined_codes:
+        for code in coding_result.refined_codes:
             confidence_pct = int(code.confidence_score * 100)
             code_details.append({
                 "code": code.icd_code,
@@ -97,95 +90,75 @@ async def analyze_document(file: UploadFile = File(...)) -> Dict[str, Any]:
                 "confidence": f"{confidence_pct}%"
             })
         
+        logger.info(f"Analysis complete - {len(diagnosis_codes)} codes generated")
+        
         return {
             "title": title,
-            "enriched_keywords": enrichment_result.enriched_keywords,
+            "enriched_keywords": "",  # No enrichment for deterministic behavior
             "diagnosis_codes": diagnosis_codes,
-            "total_codes_found": len(refinement_result.refined_codes),
+            "total_codes_found": len(coding_result.refined_codes),
             "code_details": code_details,
-            "clinical_summary": refinement_result.clinical_summary
+            "clinical_summary": coding_result.clinical_summary
         }
         
     except ValueError as e:
+        logger.error(f"Document processing validation error: {e}")
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
+        logger.error(f"Unexpected analysis failure: {e}")
         raise HTTPException(status_code=500, detail=f"Analysis failed: {str(e)}")
 
 
 @app.post("/process-spreadsheet")
 async def process_spreadsheet_document(file: UploadFile = File(...)) -> SpreadsheetRow:
-    """
-    NEW ENHANCED ENDPOINT: Clean two-step AI validation process
-    
-    Workflow:
-    1. Extract title and AI enrichment
-    2. Direct vector search (400-500 codes, no chapter limits)
-    3. Step 1: Initial selection (~50 relevant codes)
-    4. Step 2: Clinical refinement (enhanced descriptions + confidence)
-    5. Return structured spreadsheet row
-    """
+    """Process document for spreadsheet - preserving exact response format."""
     try:
-        # Step 1: Extract clean filename (strip any path)
-        clean_filename = file.filename.split('/')[-1] if '/' in file.filename else file.filename
+        logger.info(f"Processing spreadsheet document: {file.filename}")
         
-        # Step 2: Extract title
+        # Extract document data
+        clean_filename = file.filename.split('/')[-1] if '/' in file.filename else file.filename
         file_content = await file.read()
         title = extract_title_from_file(file_content, clean_filename)
         
         if not title:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Could not extract title from file: {clean_filename}"
-            )
+            logger.warning(f"Failed to extract title from spreadsheet file: {clean_filename}")
+            raise HTTPException(status_code=400, detail=f"Could not extract title from file: {clean_filename}")
         
-        # Step 3: Extract full document content for comprehensive keyword analysis
+        # Extract full content
         full_content = extract_text_from_file(file_content, clean_filename)
         
-        # Step 4: AI Title Enrichment for better vector search
-        enrichment_result = title_enricher.enrich_title(title)
-        search_text = f"{title} {enrichment_result.enriched_keywords}"
+        # Enhanced vector search - title + first page content for better semantic matching
+        first_page_content = extract_first_page_content(file_content, clean_filename)
+        if first_page_content:
+            search_text = f"{title} {first_page_content}"
+            logger.info(f"Using enhanced search with first page content: {len(search_text)} chars")
+        else:
+            search_text = f"{title} {title}"
+            logger.info(f"Fallback to title duplication - first page extraction failed")
         
-        # Step 5: AI Metadata Generation with full document content
-        metadata_result = title_enricher.generate_metadata(title, full_content)
+        # AI metadata generation
+        metadata_result = metadata_generator.generate_metadata(title, full_content)
         
-        # Step 6: Vector Search 
-        # Search all codes directly - let AI decide what's relevant
-        all_candidates = vectorstore.search_all_codes(search_text, top_k=150)
+        # Extract codes using new engine
+        coding_result = await coding_engine.extract_codes_for_spreadsheet(title, search_text)
         
-        if not all_candidates:
-            raise HTTPException(
-                status_code=404,
-                detail="No relevant codes found in vector search"
-            )
+        if not coding_result.refined_codes:
+            logger.warning("No codes validated for spreadsheet processing")
+            raise HTTPException(status_code=404, detail="No codes validated in clinical refinement step")
         
-        # Step 7: Enhanced Multi-Stage AI Validation Process
+        # Format results - exact same format as before
+        root_codes = extract_root_codes_simple(coding_result.refined_codes)
+        hierarchy_codes = extract_hierarchy_codes_simple(coding_result.refined_codes)
+        code_descriptions = format_enhanced_descriptions(coding_result.refined_codes)
+        code_scores = format_confidence_scores(coding_result.refined_codes)
+        structured_codes = format_structured_codes(coding_result.refined_codes)
         
-        # NEW: Enhanced multi-stage process with hierarchy enrichment
-        refinement_result = await validator.enhanced_multi_stage_validation(
-            medical_text=search_text,
-            initial_candidates=all_candidates,
-            vectorstore=vectorstore
-        )
+        # Generate unique name - match client spreadsheet pattern
+        unique_name = title.replace(" ", "_").replace(",", "_").replace("(", "").replace(")", "")
         
-        if not refinement_result.refined_codes:
-            raise HTTPException(
-                status_code=404,
-                detail="No codes validated in clinical refinement step"
-            )
+        logger.info(f"Spreadsheet processing complete - {len(coding_result.refined_codes)} codes generated")
         
-        # Step 8: Format Results for Spreadsheet Output
-        root_codes = extract_root_codes_simple(refinement_result.refined_codes)
-        hierarchy_codes = extract_hierarchy_codes_simple(refinement_result.refined_codes)
-        code_descriptions = format_enhanced_descriptions(refinement_result.refined_codes)
-        code_scores = format_confidence_scores(refinement_result.refined_codes)
-        
-        # NEW: Generate structured data for enhanced export capabilities
-        structured_codes = format_structured_codes(refinement_result.refined_codes)
-        
-        # Generate unique name
-        unique_name = title.replace(" ", "_").replace(",", "").replace("(", "").replace(")", "")
-        
-        # Step 9: Return Clean Spreadsheet Row with Enhanced Data
+        # Return exact same SpreadsheetRow format
         return SpreadsheetRow(
             filepath=file.filename,
             title=title,
@@ -196,17 +169,19 @@ async def process_spreadsheet_document(file: UploadFile = File(...)) -> Spreadsh
             gender=metadata_result.gender,
             unique_name=unique_name,
             keywords=metadata_result.keywords,
-            diagnosis_codes=hierarchy_codes,  # For backward compatibility
-            cpt_codes="",  # Leave 
+            diagnosis_codes=hierarchy_codes,
+            cpt_codes="",
             language="English",
-            source="AI Medical Coding System v2.0",
+            source="Medical Coding System v3.0",
             document_type="Patient Education",
-            icd_codes_structured=structured_codes  # NEW: Enhanced structured data
+            icd_codes_structured=structured_codes
         )
         
     except ValueError as e:
+        logger.error(f"Spreadsheet processing validation error: {e}")
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
+        logger.error(f"Unexpected spreadsheet processing failure: {e}")
         raise HTTPException(status_code=500, detail=f"Processing failed: {str(e)}")
 
 
@@ -258,4 +233,5 @@ def format_structured_codes(codes: List[RefinedCodeValidation]) -> List[Dict[str
 
 if __name__ == "__main__":
     import uvicorn
+    logger.info("Starting Medical Coding System server...")
     uvicorn.run(app, host="0.0.0.0", port=8000) 

@@ -132,28 +132,149 @@ def _extract_from_html(file_content: bytes) -> str:
         raise Exception("BeautifulSoup not installed. Install with: pip install beautifulsoup4")
 
 
-def validate_and_clean_text(text: str) -> str:
+def extract_first_page_content(file_content: bytes, filename: str, max_chars: int = 500) -> str:
     """
-    Validate and clean extracted text
+    Extract first page content for enhanced vector search
     
     Args:
-        text: Raw extracted text
+        file_content: Raw file bytes
+        filename: Original filename with extension
+        max_chars: Maximum characters to extract (default 500)
         
     Returns:
-        str: Cleaned text
+        str: First page content or empty string if extraction fails
     """
-    if not text or not text.strip():
-        raise ValueError("No text content found in document")
+    file_extension = filename.lower().split('.')[-1]
     
-    # Basic cleaning
-    cleaned = text.strip()
-    
-    # Remove excessive whitespace
-    import re
-    cleaned = re.sub(r'\s+', ' ', cleaned)
-    
-    # Check minimum length
-    if len(cleaned) < 10:
-        raise ValueError("Document text too short (minimum 10 characters)")
-    
-    return cleaned 
+    try:
+        if file_extension == 'pdf':
+            return _extract_first_page_from_pdf(file_content, max_chars)
+        elif file_extension in ['html', 'htm']:
+            return _extract_first_page_from_html(file_content, max_chars)
+        elif file_extension in ['doc', 'docx']:
+            return _extract_first_page_from_docx(file_content, max_chars)
+        elif file_extension == 'txt':
+            return _extract_first_page_from_txt(file_content, max_chars)
+        else:
+            print(f"⚠️ Unsupported file type for first page extraction: {file_extension}")
+            return ""
+    except Exception as e:
+        print(f"❌ First page extraction failed for {filename}: {str(e)}")
+        return ""
+
+
+def _extract_first_page_from_pdf(file_content: bytes, max_chars: int) -> str:
+    """Extract first page from PDF file"""
+    try:
+        import PyPDF2
+        pdf_file = io.BytesIO(file_content)
+        pdf_reader = PyPDF2.PdfReader(pdf_file)
+        
+        if len(pdf_reader.pages) == 0:
+            print("⚠️ PDF has no pages")
+            return ""
+        
+        # Extract ONLY first page (page 0)
+        first_page_text = pdf_reader.pages[0].extract_text()
+        
+        # Limit to max_chars
+        limited_text = first_page_text[:max_chars] if first_page_text else ""
+        
+        print(f"📄 PDF First Page Extracted: {len(limited_text)} chars")
+        print(f"🔍 First Page Preview: {limited_text[:100]}...")
+        
+        return limited_text.strip()
+        
+    except ImportError:
+        print("❌ PyPDF2 not available for PDF first page extraction")
+        return ""
+
+
+def _extract_first_page_from_html(file_content: bytes, max_chars: int) -> str:
+    """Extract first section from HTML file"""
+    try:
+        from bs4 import BeautifulSoup
+        
+        # Try different encodings
+        for encoding in ['utf-8', 'latin-1', 'cp1252']:
+            try:
+                html_content = file_content.decode(encoding)
+                break
+            except UnicodeDecodeError:
+                continue
+        else:
+            print("⚠️ Could not decode HTML content")
+            return ""
+        
+        soup = BeautifulSoup(html_content, 'html.parser')
+        
+        # Get first meaningful content section
+        content_text = soup.get_text()
+        limited_text = content_text[:max_chars] if content_text else ""
+        
+        print(f"🌐 HTML First Section Extracted: {len(limited_text)} chars")
+        print(f"🔍 First Section Preview: {limited_text[:100]}...")
+        
+        return limited_text.strip()
+        
+    except ImportError:
+        print("❌ BeautifulSoup not available for HTML first page extraction")
+        return ""
+
+
+def _extract_first_page_from_docx(file_content: bytes, max_chars: int) -> str:
+    """Extract first section from Word document"""
+    try:
+        from docx import Document
+        doc_file = io.BytesIO(file_content)
+        doc = Document(doc_file)
+        
+        # Extract text until we reach max_chars (approximate first page)
+        text_parts = []
+        current_length = 0
+        
+        for paragraph in doc.paragraphs:
+            if current_length >= max_chars:
+                break
+            para_text = paragraph.text
+            if current_length + len(para_text) > max_chars:
+                # Take partial paragraph to reach max_chars
+                remaining = max_chars - current_length
+                text_parts.append(para_text[:remaining])
+                break
+            text_parts.append(para_text)
+            current_length += len(para_text)
+        
+        limited_text = " ".join(text_parts)
+        
+        print(f"📝 DOCX First Section Extracted: {len(limited_text)} chars")
+        print(f"🔍 First Section Preview: {limited_text[:100]}...")
+        
+        return limited_text.strip()
+        
+    except ImportError:
+        print("❌ python-docx not available for DOCX first page extraction")
+        return ""
+
+
+def _extract_first_page_from_txt(file_content: bytes, max_chars: int) -> str:
+    """Extract first section from text file"""
+    try:
+        try:
+            text_content = file_content.decode('utf-8')
+        except UnicodeDecodeError:
+            text_content = file_content.decode('latin-1')
+        
+        limited_text = text_content[:max_chars]
+        
+        print(f"📄 TXT First Section Extracted: {len(limited_text)} chars")
+        print(f"🔍 First Section Preview: {limited_text[:100]}...")
+        
+        return limited_text.strip()
+        
+    except Exception as e:
+        print(f"❌ TXT first page extraction failed: {e}")
+        return ""
+
+
+ 

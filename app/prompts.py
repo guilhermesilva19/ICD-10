@@ -1,149 +1,87 @@
-"""Prompt templates for AI medical coding"""
+"""Medical coding prompt templates - all prompts consolidated."""
 
-INITIAL_SELECTION_PROMPT = """
-🩺 ICD-10 CODE SELECTION — PRIMARY DIAGNOSIS FOCUS
+# Core code selection prompt
+CODE_SELECTION_PROMPT = """
+MEDICAL CODE SELECTION - ROOT FAMILY FOCUS REQUIRED
 
-You are a senior medical coding expert. Your task is to select only the most relevant **hierarchy-level ICD-10 codes** (not root codes) to help **diagnose the primary condition(s)** described.
+Medical Documentation: {medical_text}
 
-CLINICAL DOCUMENTATION:
-{medical_text}
-
-CANDIDATE CODES:
+Available Candidate Codes:
 {candidate_codes}
 
-🔒 STRICT SELECTION GUIDELINES:
+CRITICAL SELECTION REQUIREMENTS:
+1. SELECT CODES FROM MAXIMUM 2 ROOT FAMILIES ONLY
+2. Primary root family must contain 80%+ of selected codes
+3. Secondary root family only if medically essential (maximum 20% of codes)
+4. Focus on ONE primary medical condition/diagnosis family
+5. Maximum 25 codes total to ensure precision over breadth
 
-✅ Select only **hierarchy-level ICD-10 codes** — do NOT include root codes (e.g., use F32.1, not F32).
-✅ Choose codes that are **clinically central** or **strongly related** to the main diagnosis.
-✅ Focus the selection on codes that belong **mostly to ONE root code family** (e.g., F32.*).
-✅ You may include a **second root family** if the case **clearly requires it**.
-✅ The selected codes should **capture the diagnostic picture** — this includes subtypes, variants, or highly associated codes **within the same root**.
+ROOT FAMILY ANALYSIS PROTOCOL:
+- Identify the PRIMARY root family (first 3 characters) most relevant to documentation
+- Select 10-12 codes from primary family showing condition variations/severity
+- Add secondary family ONLY if clinically essential (maximum 3 codes)
+- Avoid scattered selection across multiple unrelated families
 
+HIERARCHY REQUIREMENTS:
+- Select specific subcategory codes (with decimal points: X##.### format)
+- DO NOT select broad root codes (3-character codes without decimals)
+- Prioritize detailed diagnostic codes over general categories
+- Focus on codes with strong textual evidence in documentation
 
--DO NOT: Include broad root codes (e.g., F32, I10, E11)
--DO NOT: Include secondary or unrelated diagnoses
--DO NOT: Select codes from more than 2 root groups, under any condition
+MEDICAL CODING STANDARDS:
+- Each selected code must have clear clinical relevance
+- Prefer specific diagnostic codes over symptom codes
+- Ensure codes represent primary condition and direct complications
+- Maintain diagnostic coherence within selected families
 
-🎯 SELECTION TARGET:
-- Pick **15-50 hierarchy-level codes**
-- **At least 70-90% of the codes must come from a single root family**
-- If using more than one root, make sure it s **clinically justified**
-
-Return only the selected ICD-10 codes.
+OUTPUT FORMAT:
+Return selected ICD-10-CM codes as JSON list focusing on 1-2 root families maximum.
 """
 
-
-CLINICAL_REFINEMENT_PROMPT = """
-🩺 CLINICAL ICD-10 CODE VALIDATION & ENHANCEMENT — STRICT RELEVANCE FILTERING
-
-You are a senior ICD-10 coding expert performing final refinement of AI-generated diagnostic codes based on provided clinical documentation. Your role is to validate, remove, and enhance codes — ensuring they are **strictly relevant**, **hierarchy-level**, and **clinically useful**.
-
-CLINICAL DOCUMENTATION:
-{medical_text}
-
-PRE-SELECTED CODES FOR REFINEMENT:
-{selected_codes}
-
-🎯 GOALS:
-1. ✅ Keep only **hierarchy-level ICD-10 codes** (e.g., F32.0, I10.1) — **do NOT include root codes** like F32, I10.
-2. ✅ Retain codes that are **highly relevant** or **clinically similar** to the primary condition(s).
-3. ✅ If a group of codes are closely related (e.g., F20.0, F20.2, F20.3), retain **all of them together** to reflect clinical variants.
-4. ❌ Remove any code that is irrelevant, unrelated, or medically weak in relation to the clinical documentation.
-5. ✅ Ensure that the **majority of retained codes** belong to the **same root code family**, or at most 2–3 related families **only if clinically justified**.
-
-🔍 INCLUSION GUIDELINES:
-- KEEP codes showing severity levels, episodes (acute, chronic), or variations of the same condition
-- KEEP codes strongly associated with or clinically similar to the main condition
-- KEEP codes grouped logically within a medical diagnosis family
-- REMOVE any code not clearly supported or justified by the documentation
-
-🚫 STRICTLY FORBIDDEN:
-- ❌ Root-level codes (e.g., F32, I10)
-- ❌ Codes that are vague, generic, or weakly associated
-- ❌ Any code added merely to increase breadth — this is not a comprehensive set
-
-📦 OUTPUT FORMAT:
-For each final code, return:
-- The ICD-10 code
-- A clinically enhanced description (specific, useful, and understandable)
-- A confidence score  indicating how well this code matches the documentation
-
-"""
-
-
-
-# ===== Spreadsheet functionality prompts =====
-TITLE_ENRICHMENT_PROMPT = """
-🎯 MEDICAL TITLE ENRICHMENT FOR VECTOR SEARCH
-
-You are a medical terminology expert. Your task is to enrich a medical document title with additional relevant keywords to improve vector search accuracy.
-
-CRITICAL REQUIREMENTS:
-🚫 NEVER change the original meaning
-🚫 NEVER add unrelated medical terms
-✅ Only add synonyms, related terms, and medical variations
-✅ Keep enrichment focused and relevant
-
-Original title: {title}
-
-TASK: Generate additional medical keywords that would help find relevant ICD-10-CM codes for this topic.
-
-GUIDELINES:
-- Add medical synonyms and alternative terms
-- Include related anatomical terms if applicable
-- Add common medical abbreviations if relevant
-- Include related condition variations
-- Focus on terms that would appear in ICD code descriptions
-
-EXAMPLE:
-Original: "Heart Attack"
-Enriched: "myocardial infarction, MI, cardiac arrest, coronary thrombosis, acute coronary syndrome"
-
-Provide your enriched keywords as a comma-separated list.
-Keep the enrichment focused and medically accurate.
-"""
-
+# Metadata generation prompt
 METADATA_GENERATION_PROMPT = """
-🩺 MEDICAL DOCUMENT METADATA GENERATION
-
-You are a medical documentation expert. Analyze the medical title and document content to generate comprehensive metadata.
+MEDICAL DOCUMENT METADATA GENERATION
 
 Title: {title}
 Document Content: {content}
 
-TASK: Generate the following metadata by analyzing BOTH the title and full document content:
+Task: Generate structured metadata by analyzing the title and full document content.
+
+Required Metadata:
 
 1. GENDER APPLICABILITY:
    - "Male" - if condition primarily affects males
-   - "Female" - if condition primarily affects females  
+   - "Female" - if condition primarily affects females
    - "Both" - if condition affects both genders equally
 
-2. MEDICAL KEYWORDS:
-   - Extract key medical terms from the content
-   - Include relevant anatomical terms
-   - Add symptoms, treatments, procedures
-   - Include diagnostic terms and medical conditions
-   - **EXPAND KEYWORDS FOR COMPREHENSIVE COVERAGE:**
-     * Include ACRONYMS and their full forms (e.g., "COPD, chronic obstructive pulmonary disease")
-     * Add SYNONYMS and alternative medical terms
-     * Include LAYMAN TERMS and common patient language (e.g., "heart attack" for "myocardial infarction")
-     * Add related medical specialties and care areas
-     * Include brand names and generic drug names where applicable
-     * Add procedure variations (minimally invasive, open, laparoscopic, etc.)
-   - Format as comma-separated list
-   - Include synonyms and related terms
-   - Focus on terms that would help in medical coding and search
+2. MEDICAL KEYWORDS (Structured Format):
+   Extract keywords in this specific structure:
+   
+   A. RELEVANT MEDICAL TERMS:
+   - Extract relevant medical keywords from the document content
+   - Focus on primary conditions, treatments, procedures mentioned
+   - Include anatomical terms and body systems referenced
+   - Prioritize document-specific medical terminology
+   
+   B. ACRONYMS (Maximum 10):
+   - Include medical acronyms found or implied in content
+   - Examples: MI, COPD, GAD, ICD, MRI, etc.
+   - Only include if relevant to document content
+   
+   C. SYNONYMS/LAYMAN TERMS (Maximum 10):
+   - Include common patient language terms
+   - Add synonyms for medical conditions mentioned
+   - Include alternative terminology for procedures/treatments
+   - Focus on terms patients would use
 
-GUIDELINES:
+Guidelines:
 - Analyze the FULL document content, not just the title
-- Be accurate about gender applicability based on content analysis
-- Focus on clinically relevant keywords from the entire document
-- Include both technical and common medical terms found in content and other relavant keywords too that might not be mentioned int he document
-- Extract procedure names, medication categories, and treatment approaches
-- Include anatomical terms and body systems mentioned
-- You should provide at least 20-40 comprehensive keywords (increased to accommodate expansions)
-- Prioritize terms that appear in or relate to the document content
-- **EXAMPLE:** For "diabetes" include: "diabetes, DM, diabetes mellitus, diabetic, high blood sugar, hyperglycemia, insulin resistance"
+- Extract only terms directly relevant to the document
+- !!!Avoid generic medical terms like "health", "patient", "medical"
+- Format as single comma-separated list combining all categories
+- Prioritize quality over quantity - be selective
+- Focus on terms specific to the document's medical topic
 
-Provide accurate and clinically appropriate metadata based on the complete document analysis.
+Provide accurate and clinically appropriate metadata based on complete document analysis.
 """
+
