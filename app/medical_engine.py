@@ -132,15 +132,15 @@ class MedicalCodingEngine:
                 else:
                     logger.warning(f"Filtered out root code from selection: {code}")
                 
-                # Add ALL official children within allowed families
-                children = icd_lib.get_children(code)
-                family_filtered_children = [
-                    child for child in children 
-                    if self._extract_root_family(child) in allowed_families and not self._is_root_code(child)
+                # Add ALL official descendants (recursive) within allowed families
+                descendants = self._get_all_descendants(code)
+                family_filtered_descendants = [
+                    desc for desc in descendants 
+                    if self._extract_root_family(desc) in allowed_families and not self._is_root_code(desc)
                 ]
                 
-                all_codes.update(family_filtered_children)
-                logger.debug(f"Added {len(family_filtered_children)} children for {code}")
+                all_codes.update(family_filtered_descendants)
+                logger.debug(f"Added {len(family_filtered_descendants)} descendants for {code}")
                 
             except Exception as e:
                 logger.error(f"Error processing code {code}: {e}")
@@ -195,6 +195,25 @@ class MedicalCodingEngine:
     def _is_root_code(self, code: str) -> bool:
         """Check if code is a root code (3 characters without decimal)."""
         return len(code) == 3 and code.isalnum()
+    
+    def _get_all_descendants(self, code: str) -> List[str]:
+        """Recursively get ALL descendants of a code down to leaf nodes."""
+        all_descendants = []
+        
+        try:
+            # Get direct children
+            children = icd_lib.get_children(code)
+            
+            for child in children:
+                all_descendants.append(child)
+                # Recursively get grandchildren, great-grandchildren, etc.
+                descendants = self._get_all_descendants(child)
+                all_descendants.extend(descendants)
+                
+        except Exception as e:
+            logger.warning(f"Error getting descendants for {code}: {e}")
+        
+        return all_descendants
     
     def _create_enhanced_description(self, code: str) -> str:
         """Create enhanced description using official ICD data."""
