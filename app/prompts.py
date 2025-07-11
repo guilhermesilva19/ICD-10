@@ -40,12 +40,13 @@ EXCLUSION RULES:
 
 # Metadata generation prompt
 METADATA_GENERATION_PROMPT = """
-MEDICAL DOCUMENT METADATA GENERATION
-
+You are a medical search optimization and metadata generation expert.
+Your task is to analyze the document title and content to generate relevant keywords for indexing, search, and metadata tagging.
+   
 Title: {title}
 Document Content: {content}
 
-Task: Generate structured metadata by analyzing the title and full document content.
+Task: Generate structured metadata by analyzing the title and document content.
 
 Required Metadata:
 
@@ -62,33 +63,43 @@ Required Metadata:
    - Do NOT assume gender bias - most medical conditions affect both genders
    - Analyze the FULL document content to determine if condition is truly gender-exclusive
 
-2. MEDICAL KEYWORDS (Structured Format):
-   Extract keywords in this specific structure:
-   
-   A. RELEVANT MEDICAL TERMS:
-   - Extract relevant medical keywords from the document content
-   - Focus on primary conditions, treatments, procedures mentioned
-   - Include anatomical terms and body systems referenced
-   - Prioritize document-specific medical terminology
-   
-   B. ACRONYMS (Maximum 10):
-   - Include medical acronyms found or implied in content
-   - Examples: MI, COPD, GAD, ICD, MRI, etc.
-   - Only include if relevant to document content
-   
-   C. SYNONYMS/LAYMAN TERMS (Maximum 10):
-   - Include common patient language terms
-   - Add synonyms for medical conditions mentioned
-   - Include alternative terminology for procedures/treatments
-   - Focus on terms patients would use
+2. MEDICAL KEYWORDS:
+ 
+   INCLUDE:
+   1. Subject Terms:
+      - Core medical condition or topic
+      - Synonyms or alternate clinical names
+   2. Topic-Specific Words:
+      - Anatomy involved (e.g., femur, tibia, fibula for leg fracture)
+      - Diagnostic terminology (not general symptoms)
+      - Modifiers (e.g., open fracture, closed fracture, displaced, left leg, right leg)
+   3. Clinical Terms:
+      - Proper medical terminology for diagnosis or charting
+   4. Layman Terms:
+      - Patient-friendly or common names for the condition
+   5. Abbreviations and Acronyms:
+      - Common clinical short forms (e.g., I&D, SOB, TIA)
+      - Include variations with or without punctuation
+   6. Shorthand or Slang:
+      - Informal terms used in clinical settings or documentation
+   7. Common Misspellings or Variants:
+      - Words patients may type in error or phonetically
+   8. Related Procedures:
+      - Only if included in the title or content
+   9. Hallmark Symptoms:
+      - Only if defining to the condition (e.g., "RLQ pain" for appendicitis)
+   10. Patient Population Tags:
+       - Only if present in the title or content
+       - Examples: adult, pediatric, child, kid, teen, adolescent, baby, infant, newborn, toddler, pregnancy, pregnant, senior adult, geriatric, older adult
 
-Guidelines:
-- Analyze the FULL document content, not just the title
-- Extract only terms directly relevant to the document
-- !!!Avoid generic medical terms like "health", "patient", "medical"
-- Format as single comma-separated list combining all categories
-- Prioritize quality over quantity - be selective
-- Focus on terms specific to the document's medical topic
+   DO NOT INCLUDE:
+   - Medication names (e.g., NSAIDs, acetaminophen)
+   - Generic symptoms (e.g., fever, fatigue)
+   - Treatment types not specific to the diagnosis
+   - Vague terms or unrelated words
+
+   Format as single, comma-separated list of keywords in lowercase.
+   Remove exact duplicates. Include common spelling variants and search-friendly alternatives.
 
 Provide accurate and clinically appropriate metadata based on complete document analysis.
 """
