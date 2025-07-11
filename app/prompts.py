@@ -2,40 +2,40 @@
 
 # Core code selection prompt
 CODE_SELECTION_PROMPT = """
-MEDICAL CODE SELECTION - ROOT FAMILY FOCUS REQUIRED
+You are an ICD-10-CM medical coding expert.
 
-Medical Documentation: {medical_text}
+Medical Documentation (clinical topic): {medical_text}
 
 Available Candidate Codes:
 {candidate_codes}
 
-CRITICAL SELECTION REQUIREMENTS:
-1. SELECT CODES FROM MAXIMUM 2 ROOT FAMILIES ONLY
-2. Primary root family must contain 80%+ of selected codes
-3. Secondary root family only if medically essential (maximum 20% of codes)
-4. Focus on ONE primary medical condition/diagnosis family
-5. Maximum 25 codes total to ensure precision over breadth
-
-ROOT FAMILY ANALYSIS PROTOCOL:
-- Identify the PRIMARY root family (first 3 characters) most relevant to documentation
-- Select 10-12 codes from primary family showing condition variations/severity
-- Add secondary family ONLY if clinically essential (maximum 3 codes)
-- Avoid scattered selection across multiple unrelated families
-
-HIERARCHY REQUIREMENTS:
-- Select specific subcategory codes (with decimal points: X##.### format)
-- DO NOT select broad root codes (3-character codes without decimals)
-- Prioritize detailed diagnostic codes over general categories
-- Focus on codes with strong textual evidence in documentation
-
-MEDICAL CODING STANDARDS:
-- Each selected code must have clear clinical relevance
-- Prefer specific diagnostic codes over symptom codes
-- Ensure codes represent primary condition and direct complications
-- Maintain diagnostic coherence within selected families
-
-OUTPUT FORMAT:
-Return selected ICD-10-CM codes as JSON list focusing on 1-2 root families maximum.
+Your task is to map the given clinical topic to all applicable ICD-10-CM codes for use in EHR retrieval of patient education documents. Follow the steps below precisely:
+---
+ STEP 1: Match the base code(s)
+- Identify the most clinically relevant base ICD-10-CM code(s) (3-character category).
+- Select only the base code(s) directly tied to the main diagnostic concept.
+- If more than one base code applies, include them only if clinically necessary.
+---
+STEP 2: Select applicable subcodes
+- Expand all subcategories (4-character and above) under each base code.
+- Default: include all subcodes unless the topic is narrowly defined.
+- If the topic specifies a subtype, include only that subcategory and its descendants.
+  Examples:
+  - Topic = “abdominal pain” → Include all subcodes under R10.
+  - Topic = “diabetes with PAD” → Include only subcode E11.5 and its full codes.
+---
+ STEP 3: Include all full ICD-10-CM codes
+- For each subcategory, list all 5–7 character codes under it in the hierarchy.
+- Include all modifiers such as:
+  - Encounter type (initial, subsequent, sequela)
+  - Laterality
+  - Severity or anatomical detail
+- Do NOT truncate or filter. Include all full codes listed in the CDC Tabular List for each subcategory.
+---
+EXCLUSION RULES:
+- Do not include root codes like E11 or R10 without extensions.
+- Do not stop at the 4-character level — always return the most specific 5–7 character codes.
+---
 """
 
 # Metadata generation prompt
