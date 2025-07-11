@@ -49,11 +49,18 @@ Task: Generate structured metadata by analyzing the title and full document cont
 
 Required Metadata:
 
-1. GENDER APPLICABILITY:
-   - "Male" - if condition explicitly affects males
-   - "Female" - if condition explicitly affects females
-   - "Both" - if condition affects both genders equally
-   - only return "male" or "female" if the condition is known to affect onlt one gender 
+1. GENDER APPLICABILITY (STRICT CLASSIFICATION):
+   - "Male" - ONLY if condition EXCLUSIVELY affects males and NEVER affects females
+   - "Female" - ONLY if condition EXCLUSIVELY affects females and NEVER affects males  
+   - "Both" - DEFAULT for all other conditions (affects both genders or gender-neutral)
+   
+   STRICT RULES:
+   - Return "Male" ONLY for: prostate conditions, testicular conditions, male-specific procedures
+   - Return "Female" ONLY for: pregnancy, menstruation, ovarian conditions, cervical conditions, breast conditions specific to females
+   - Return "Both" for: arthritis, diabetes, heart disease, infections, most medical conditions, surgical procedures, general treatments
+   - When in doubt, ALWAYS return "Both"
+   - Do NOT assume gender bias - most medical conditions affect both genders
+   - Analyze the FULL document content to determine if condition is truly gender-exclusive
 
 2. MEDICAL KEYWORDS (Structured Format):
    Extract keywords in this specific structure:
