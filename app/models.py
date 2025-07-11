@@ -34,14 +34,6 @@ class ClinicalRefinementResponse(BaseModel):
     )
 
 
-class TitleEnrichment(BaseModel):
-    """AI Title Enrichment Response"""
-    model_config = ConfigDict(extra='forbid')
-    
-    enriched_keywords: str = Field(description="Additional medical keywords for better vector search")
-    reasoning: str = Field(description="Brief explanation of enrichment")
-
-
 class DocumentMetadata(BaseModel):
     """AI Document Metadata Generation Response"""
     model_config = ConfigDict(extra='forbid')
