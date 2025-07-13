@@ -35,12 +35,24 @@ class ClinicalRefinementResponse(BaseModel):
 
 
 class DocumentMetadata(BaseModel):
-    """AI Document Metadata Generation Response"""
+    """AI Document Metadata Generation Response - Step 1: Core Metadata"""
     model_config = ConfigDict(extra='forbid')
     
     gender: str = Field(description="Gender applicability: Male, Female, or Both")
     keywords: str = Field(description="Comma-separated medical keywords extracted from content")
     reasoning: str = Field(description="Brief explanation of metadata generation")
+
+
+class EnhancedTerminology(BaseModel):
+    """AI Enhanced Terminology Generation Response - Step 2: Synonyms, Acronyms & Terms"""
+    model_config = ConfigDict(extra='forbid')
+    
+    synonyms: str = Field(description="Medical synonyms and alternative terms")
+    acronyms: str = Field(description="Clinical abbreviations and acronyms")
+    misspellings: str = Field(description="Common misspellings and phonetic variants")
+    layman_terms: str = Field(description="Patient-friendly and common names")
+    clinical_terms: str = Field(description="Professional medical terminology")
+    reasoning: str = Field(description="Brief explanation of terminology enhancement")
 
 
 class SpreadsheetRow(BaseModel):

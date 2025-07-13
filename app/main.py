@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 
 # Initialize FastAPI
 app = FastAPI(title="Medical Coding System", version="3.0.0")
-templates = Jinja2Templates(directory="app/templates") 
+templates = Jinja2Templates(directory="app/templates")
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 
 # Initialize components with logging
@@ -71,6 +71,67 @@ async def analyze_document(file: UploadFile = File(...)) -> Dict[str, Any]:
             search_text = f"{title} {title}"
             logger.info(f"Fallback to title duplication - first page extraction failed")
         
+        # AI metadata generation - Step 1: Core metadata (gender + keywords)
+        full_content = extract_text_from_file(file_content, clean_filename)
+        metadata_result = metadata_generator.generate_metadata(title, full_content)
+        
+        # AI metadata generation - Step 2: Enhanced terminology (synonyms, acronyms, terms)
+        terminology_result = metadata_generator.generate_enhanced_terminology(
+            title, metadata_result.keywords, full_content
+        )
+        
+        # Combine all terminology into comprehensive keywords
+        keyword_parts = []
+        seen_keywords = set()  # Track keywords to prevent duplicates
+        
+        # Helper function to add unique keywords
+        def add_unique_keywords(keyword_string):
+            if not keyword_string:
+                return []
+            keywords = [k.strip().lower() for k in keyword_string.split(',') if k.strip()]
+            unique_keywords = []
+            for keyword in keywords:
+                if keyword not in seen_keywords:
+                    seen_keywords.add(keyword)
+                    unique_keywords.append(keyword)
+            return unique_keywords
+        
+        # Add keywords from each category, removing duplicates
+        if metadata_result.keywords:
+            unique_base = add_unique_keywords(metadata_result.keywords)
+            if unique_base:
+                keyword_parts.append(', '.join(unique_base))
+                
+        if terminology_result.synonyms:
+            unique_synonyms = add_unique_keywords(terminology_result.synonyms)
+            if unique_synonyms:
+                keyword_parts.append(', '.join(unique_synonyms))
+                
+        if terminology_result.acronyms:
+            unique_acronyms = add_unique_keywords(terminology_result.acronyms)
+            if unique_acronyms:
+                keyword_parts.append(', '.join(unique_acronyms))
+                
+        if terminology_result.misspellings:
+            unique_misspellings = add_unique_keywords(terminology_result.misspellings)
+            if unique_misspellings:
+                keyword_parts.append(', '.join(unique_misspellings))
+                
+        if terminology_result.layman_terms:
+            unique_layman = add_unique_keywords(terminology_result.layman_terms)
+            if unique_layman:
+                keyword_parts.append(', '.join(unique_layman))
+                
+        if terminology_result.clinical_terms:
+            unique_clinical = add_unique_keywords(terminology_result.clinical_terms)
+            if unique_clinical:
+                keyword_parts.append(', '.join(unique_clinical))
+        
+        # Create comprehensive keyword string
+        final_keywords = ", ".join(keyword_parts) if keyword_parts else metadata_result.keywords
+        
+        logger.info(f"Metadata generation complete - Base: {len(metadata_result.keywords)} chars, Final: {len(final_keywords)} chars, Unique terms: {len(seen_keywords)}")
+        
         # Extract codes using new engine
         coding_result = await coding_engine.extract_codes_for_spreadsheet(title, search_text)
         
@@ -94,7 +155,7 @@ async def analyze_document(file: UploadFile = File(...)) -> Dict[str, Any]:
         
         return {
             "title": title,
-            "enriched_keywords": "",  # No enrichment for deterministic behavior
+            "enriched_keywords": final_keywords,
             "diagnosis_codes": diagnosis_codes,
             "total_codes_found": len(coding_result.refined_codes),
             "code_details": code_details,
@@ -136,8 +197,65 @@ async def process_spreadsheet_document(file: UploadFile = File(...)) -> Spreadsh
             search_text = f"{title} {title}"
             logger.info(f"Fallback to title duplication - first page extraction failed")
         
-        # AI metadata generation
+        # AI metadata generation - Step 1: Core metadata (gender + keywords)
         metadata_result = metadata_generator.generate_metadata(title, full_content)
+        
+        # AI metadata generation - Step 2: Enhanced terminology (synonyms, acronyms, terms)
+        terminology_result = metadata_generator.generate_enhanced_terminology(
+            title, metadata_result.keywords, full_content
+        )
+        
+        # Combine all terminology into comprehensive keywords
+        keyword_parts = []
+        seen_keywords = set()  # Track keywords to prevent duplicates
+        
+        # Helper function to add unique keywords
+        def add_unique_keywords(keyword_string):
+            if not keyword_string:
+                return []
+            keywords = [k.strip().lower() for k in keyword_string.split(',') if k.strip()]
+            unique_keywords = []
+            for keyword in keywords:
+                if keyword not in seen_keywords:
+                    seen_keywords.add(keyword)
+                    unique_keywords.append(keyword)
+            return unique_keywords
+        
+        # Add keywords from each category, removing duplicates
+        if metadata_result.keywords:
+            unique_base = add_unique_keywords(metadata_result.keywords)
+            if unique_base:
+                keyword_parts.append(', '.join(unique_base))
+                
+        if terminology_result.synonyms:
+            unique_synonyms = add_unique_keywords(terminology_result.synonyms)
+            if unique_synonyms:
+                keyword_parts.append(', '.join(unique_synonyms))
+                
+        if terminology_result.acronyms:
+            unique_acronyms = add_unique_keywords(terminology_result.acronyms)
+            if unique_acronyms:
+                keyword_parts.append(', '.join(unique_acronyms))
+                
+        if terminology_result.misspellings:
+            unique_misspellings = add_unique_keywords(terminology_result.misspellings)
+            if unique_misspellings:
+                keyword_parts.append(', '.join(unique_misspellings))
+                
+        if terminology_result.layman_terms:
+            unique_layman = add_unique_keywords(terminology_result.layman_terms)
+            if unique_layman:
+                keyword_parts.append(', '.join(unique_layman))
+                
+        if terminology_result.clinical_terms:
+            unique_clinical = add_unique_keywords(terminology_result.clinical_terms)
+            if unique_clinical:
+                keyword_parts.append(', '.join(unique_clinical))
+        
+        # Create comprehensive keyword string
+        final_keywords = ", ".join(keyword_parts) if keyword_parts else metadata_result.keywords
+        
+        logger.info(f"Metadata generation complete - Base: {len(metadata_result.keywords)} chars, Final: {len(final_keywords)} chars, Unique terms: {len(seen_keywords)}")
         
         # Extract codes using new engine
         coding_result = await coding_engine.extract_codes_for_spreadsheet(title, search_text)
@@ -168,7 +286,7 @@ async def process_spreadsheet_document(file: UploadFile = File(...)) -> Spreadsh
             details_score=code_scores,
             gender=metadata_result.gender,
             unique_name=unique_name,
-            keywords=metadata_result.keywords,
+            keywords=final_keywords,
             diagnosis_codes=hierarchy_codes,
             cpt_codes="",
             language="English",

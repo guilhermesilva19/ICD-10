@@ -38,19 +38,22 @@ EXCLUSION RULES:
 ---
 """
 
-# Metadata generation prompt
+# Core metadata generation prompt (Step 1)
 METADATA_GENERATION_PROMPT = """
-You are a medical search optimization and metadata generation expert.
-Your task is to analyze the document title and content to generate relevant keywords for indexing, search, and metadata tagging.
-   
+You are a senior medical coding specialist with expertise in document classification and metadata extraction.
+
 Title: {title}
 Document Content: {content}
 
-Task: Generate structured metadata by analyzing the title and document content.
+TASK: Extract core metadata from this medical document following these precise steps:
 
-Required Metadata:
+STEP 1 - GENDER CLASSIFICATION:
+Determine gender applicability using STRICT medical criteria:
+- "Male" - ONLY for conditions that EXCLUSIVELY affect males (prostate, testicular, male-specific procedures)
+- "Female" - ONLY for conditions that EXCLUSIVELY affect females (pregnancy, menstruation, ovarian, cervical, female-specific breast conditions)
+- "Both" - DEFAULT for all other conditions (arthritis, diabetes, heart disease, infections, general procedures, treatments)
 
-1. GENDER APPLICABILITY (STRICT CLASSIFICATION):
+NOTE:GENDER APPLICABILITY (STRICT CLASSIFICATION):
    - "Male" - ONLY if condition EXCLUSIVELY affects males and NEVER affects females
    - "Female" - ONLY if condition EXCLUSIVELY affects females and NEVER affects males  
    - "Both" - DEFAULT for all other conditions (affects both genders or gender-neutral)
@@ -63,44 +66,81 @@ Required Metadata:
    - Do NOT assume gender bias - most medical conditions affect both genders
    - Analyze the FULL document content to determine if condition is truly gender-exclusive
 
-2. MEDICAL KEYWORDS:
- 
-   INCLUDE:
-   1. Subject Terms:
-      - Core medical condition or topic
-      - Synonyms or alternate clinical names
-   2. Topic-Specific Words:
-      - Anatomy involved (e.g., femur, tibia, fibula for leg fracture)
-      - Diagnostic terminology (not general symptoms)
-      - Modifiers (e.g., open fracture, closed fracture, displaced, left leg, right leg)
-   3. Clinical Terms:
-      - Proper medical terminology for diagnosis or charting
-   4. Layman Terms:
-      - Patient-friendly or common names for the condition
-   5. Abbreviations and Acronyms:
-      - Common clinical short forms (e.g., I&D, SOB, TIA)
-      - Include variations with or without punctuation
-   6. Shorthand or Slang:
-      - Informal terms used in clinical settings or documentation
-   7. Common Misspellings or Variants:
-      - Words patients may type in error or phonetically
-   8. Related Procedures:
-      - Only if included in the title or content
-   9. Hallmark Symptoms:
-      - Only if defining to the condition (e.g., "RLQ pain" for appendicitis)
-   10. Patient Population Tags:
-       - Only if present in the title or content
-       - Examples: adult, pediatric, child, kid, teen, adolescent, baby, infant, newborn, toddler, pregnancy, pregnant, senior adult, geriatric, older adult
+CRITICAL: When in doubt, ALWAYS select "Both". Most medical conditions affect both genders.
 
-   DO NOT INCLUDE:
-   - Medication names (e.g., NSAIDs, acetaminophen)
-   - Generic symptoms (e.g., fever, fatigue)
-   - Treatment types not specific to the diagnosis
-   - Vague terms or unrelated words
+STEP 2 - CORE KEYWORDS:
+Extract essential medical keywords focusing ONLY on:
+- Primary medical condition or diagnosis
+- Key anatomical structures involved
+- Essential diagnostic terminology
+- Critical clinical modifiers
+- Specific patient population if explicitly mentioned (pediatric, geriatric)
 
-   Format as single, comma-separated list of keywords in lowercase.
-   Remove exact duplicates. Include common spelling variants and search-friendly alternatives.
+EXCLUDE these generic terms that apply to many topics:
+- General symptoms (pain, swelling, fatigue, fever)
+- Common treatments (medication, surgery, therapy)
+- Vague descriptors (chronic, acute, severe, mild)
+- Generic body systems (cardiovascular, respiratory)
+- Broad categories (disease, disorder, condition)
 
-Provide accurate and clinically appropriate metadata based on complete document analysis.
+Format keywords as comma-separated lowercase terms. Keep focused and specific.
+"""
+
+# Enhanced terminology generation prompt (Step 2)
+ENHANCED_TERMINOLOGY_PROMPT = """
+You are a senior medical terminology specialist with expertise in search optimization and clinical vocabulary expansion.
+
+Title: {title}
+Core Keywords: {core_keywords}
+Document Content: {content}
+
+TASK: Expand the core keywords with comprehensive medical terminology following these steps:
+
+
+
+STEP 1 - SYNONYMS:
+Generate medical synonyms and alternative clinical names:
+- Official medical terminology variants
+- Alternative diagnostic terms
+- Related condition names with same clinical meaning
+- EXCLUDE terms already in core keywords
+
+STEP 2 - ACRONYMS:
+Identify relevant clinical abbreviations:
+- Standard medical acronyms (ICD, CPT, ROM)
+- Procedure abbreviations (I&D, CABG, TURP)
+- Condition-specific shorthand
+- Include variations with/without punctuation
+- DONT INCLUDE any terms already listed in synonyms or core keywords
+
+STEP 3 - MISSPELLINGS:
+Anticipate common search errors:
+- Phonetic spelling variants
+- Common typing mistakes
+- Alternative medical term spellings
+- EXCLUDE any terms already listed in previous categories
+
+STEP 4 - LAYMAN TERMS:
+Include patient-friendly terminology:
+- Common names patients use
+- Non-medical descriptions
+- Everyday language for conditions
+
+STEP 5 - CLINICAL TERMS:
+Add professional medical language:
+- Formal diagnostic terminology
+- Advanced clinical descriptors
+- Specialized medical vocabulary
+
+CRITICAL EXCLUSIONS - DO NOT INCLUDE:
+- Generic symptoms that apply to many conditions
+- Medication names or drug classes
+- Vague treatment descriptions
+- Common words that lack medical specificity
+- Terms that would match hundreds of unrelated topics
+- ANY term that appears in core keywords or other categories
+
+Format each category as comma-separated lowercase terms.
+Focus on search optimization while maintaining medical accuracy.
 """
 
