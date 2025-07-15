@@ -1,10 +1,12 @@
 """Medical coding system with deterministic processing and official ICD validation."""
 
 import logging
+import os
 from fastapi import FastAPI, HTTPException, File, UploadFile, Request
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
+from fastapi.middleware.cors import CORSMiddleware
 from typing import Dict, Any, List
 
 from .models import SpreadsheetRow, RefinedCodeValidation
@@ -24,8 +26,32 @@ logger = logging.getLogger(__name__)
 
 # Initialize FastAPI
 app = FastAPI(title="Medical Coding System", version="3.0.0")
-templates = Jinja2Templates(directory="app/templates")
-app.mount("/static", StaticFiles(directory="app/static"), name="static")
+
+# Add CORS middleware for AWS compatibility
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Configure this properly for production
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+    max_age=3600,
+)
+
+# Get absolute paths for reliable file serving
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+TEMPLATES_DIR = os.path.join(BASE_DIR, "app", "templates")
+STATIC_DIR = os.path.join(BASE_DIR, "app", "static")
+
+# Debug logging for deployment troubleshooting
+logger.info(f"Base directory: {BASE_DIR}")
+logger.info(f"Templates directory: {TEMPLATES_DIR}")
+logger.info(f"Static directory: {STATIC_DIR}")
+logger.info(f"Static directory exists: {os.path.exists(STATIC_DIR)}")
+if os.path.exists(STATIC_DIR):
+    logger.info(f"Static files: {os.listdir(STATIC_DIR)}")
+
+templates = Jinja2Templates(directory=TEMPLATES_DIR)
+app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 # Initialize components with logging
 logger.info("Initializing medical coding system components...")
@@ -48,14 +74,22 @@ async def spreadsheet_interface(request: Request):
     return templates.TemplateResponse("spreadsheet.html", {"request": request})
 
 @app.post("/analyze")
-async def analyze_document(file: UploadFile = File(...)) -> Dict[str, Any]:
+async def analyze_document(file: UploadFile = File(..., max_size=50 * 1024 * 1024)) -> Dict[str, Any]:  # 50MB limit
     """Analyze single document - preserving exact response format."""
     try:
         logger.info(f"Processing single document analysis for: {file.filename}")
         
+        # Validate file
+        if not file.filename:
+            raise HTTPException(status_code=400, detail="No filename provided")
+        
         # Extract document data
         clean_filename = file.filename.split('/')[-1] if '/' in file.filename else file.filename
         file_content = await file.read()
+        
+        # Validate file content
+        if not file_content or len(file_content) == 0:
+            raise HTTPException(status_code=400, detail="Empty file provided")
         title = extract_title_from_file(file_content, clean_filename)
         
         if not title:
@@ -171,14 +205,22 @@ async def analyze_document(file: UploadFile = File(...)) -> Dict[str, Any]:
 
 
 @app.post("/process-spreadsheet")
-async def process_spreadsheet_document(file: UploadFile = File(...)) -> SpreadsheetRow:
+async def process_spreadsheet_document(file: UploadFile = File(..., max_size=50 * 1024 * 1024)) -> SpreadsheetRow:  # 50MB limit
     """Process document for spreadsheet - preserving exact response format."""
     try:
         logger.info(f"Processing spreadsheet document: {file.filename}")
         
+        # Validate file
+        if not file.filename:
+            raise HTTPException(status_code=400, detail="No filename provided")
+        
         # Extract document data
         clean_filename = file.filename.split('/')[-1] if '/' in file.filename else file.filename
         file_content = await file.read()
+        
+        # Validate file content
+        if not file_content or len(file_content) == 0:
+            raise HTTPException(status_code=400, detail="Empty file provided")
         title = extract_title_from_file(file_content, clean_filename)
         
         if not title:
