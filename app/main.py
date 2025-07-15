@@ -13,6 +13,7 @@ from .models import SpreadsheetRow, RefinedCodeValidation
 from .document_reader import extract_title_from_file, extract_text_from_file, extract_first_page_content
 from .medical_engine import MedicalCodingEngine
 from .metadata_generator import MetadataGenerator
+from .metadata_extractor import extract_embedded_metadata
 
 # Configure professional logging
 logging.basicConfig(
@@ -105,11 +106,18 @@ async def analyze_document(file: UploadFile = File(..., max_size=50 * 1024 * 102
             search_text = f"{title} {title}"
             logger.info(f"Fallback to title duplication - first page extraction failed")
         
-        # AI metadata generation - Step 1: Core metadata (gender + keywords)
+        # For HTML: extract embedded metadata, for others: use AI
+        extracted_gender, extracted_unique = extract_embedded_metadata(file_content, clean_filename)
+        
+        # AI metadata generation for keywords (and gender/unique for non-HTML)
         full_content = extract_text_from_file(file_content, clean_filename)
         metadata_result = metadata_generator.generate_metadata(title, full_content)
         
-        # AI metadata generation - Step 2: Enhanced terminology (synonyms, acronyms, terms)
+        # Use extracted metadata for HTML, AI metadata for others
+        gender = extracted_gender if extracted_gender else metadata_result.gender
+        unique_name = extracted_unique if extracted_unique else title.replace(" ", "_").replace(",", "_").replace("(", "").replace(")", "")
+        
+        # AI metadata generation - Enhanced terminology (synonyms, acronyms, terms)
         terminology_result = metadata_generator.generate_enhanced_terminology(
             title, metadata_result.keywords, full_content
         )
@@ -239,10 +247,17 @@ async def process_spreadsheet_document(file: UploadFile = File(..., max_size=50 
             search_text = f"{title} {title}"
             logger.info(f"Fallback to title duplication - first page extraction failed")
         
-        # AI metadata generation - Step 1: Core metadata (gender + keywords)
+        # For HTML: extract embedded metadata, for others: use AI
+        extracted_gender, extracted_unique = extract_embedded_metadata(file_content, clean_filename)
+        
+        # AI metadata generation for keywords (and gender/unique for non-HTML)
         metadata_result = metadata_generator.generate_metadata(title, full_content)
         
-        # AI metadata generation - Step 2: Enhanced terminology (synonyms, acronyms, terms)
+        # Use extracted metadata for HTML, AI metadata for others
+        gender = extracted_gender if extracted_gender else metadata_result.gender
+        unique_name = extracted_unique if extracted_unique else title.replace(" ", "_").replace(",", "_").replace("(", "").replace(")", "")
+        
+        # AI metadata generation - Enhanced terminology (synonyms, acronyms, terms)
         terminology_result = metadata_generator.generate_enhanced_terminology(
             title, metadata_result.keywords, full_content
         )
@@ -313,12 +328,10 @@ async def process_spreadsheet_document(file: UploadFile = File(..., max_size=50 
         code_scores = format_confidence_scores(coding_result.refined_codes)
         structured_codes = format_structured_codes(coding_result.refined_codes)
         
-        # Generate unique name - match client spreadsheet pattern
-        unique_name = title.replace(" ", "_").replace(",", "_").replace("(", "").replace(")", "")
-        
         logger.info(f"Spreadsheet processing complete - {len(coding_result.refined_codes)} codes generated")
+        logger.info(f"Using metadata - Gender: {gender}, Unique Name: {unique_name}")
         
-        # Return exact same SpreadsheetRow format
+        # Return exact same SpreadsheetRow format using extracted metadata
         return SpreadsheetRow(
             filepath=file.filename,
             title=title,
@@ -326,8 +339,8 @@ async def process_spreadsheet_document(file: UploadFile = File(..., max_size=50 
             icd_code_hierarchy=hierarchy_codes,
             details_description=code_descriptions,
             details_score=code_scores,
-            gender=metadata_result.gender,
-            unique_name=unique_name,
+            gender=gender,  # Use extracted metadata instead of AI
+            unique_name=unique_name,  # Use extracted metadata instead of AI
             keywords=final_keywords,
             diagnosis_codes=hierarchy_codes,
             cpt_codes="",
