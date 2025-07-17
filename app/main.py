@@ -75,7 +75,7 @@ async def spreadsheet_interface(request: Request):
     return templates.TemplateResponse("spreadsheet.html", {"request": request})
 
 @app.post("/analyze")
-async def analyze_document(file: UploadFile = File(..., max_size=50 * 1024 * 1024)) -> Dict[str, Any]:  # 50MB limit
+async def analyze_document(file: UploadFile = File(..., max_size=1024 * 1024 * 1024)) -> Dict[str, Any]:  # 1GB limit
     """Analyze single document - preserving exact response format."""
     try:
         logger.info(f"Processing single document analysis for: {file.filename}")
@@ -213,7 +213,7 @@ async def analyze_document(file: UploadFile = File(..., max_size=50 * 1024 * 102
 
 
 @app.post("/process-spreadsheet")
-async def process_spreadsheet_document(file: UploadFile = File(..., max_size=50 * 1024 * 1024)) -> SpreadsheetRow:  # 50MB limit
+async def process_spreadsheet_document(file: UploadFile = File(..., max_size=1024 * 1024 * 1024)) -> SpreadsheetRow:  # 1GB limit
     """Process document for spreadsheet - preserving exact response format."""
     try:
         logger.info(f"Processing spreadsheet document: {file.filename}")

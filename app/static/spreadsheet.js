@@ -4,7 +4,7 @@
 class ZipFileProcessor {
     constructor() {
         this.supportedTypes = ['.txt', '.pdf', '.doc', '.docx', '.html', '.htm'];
-        this.maxZipSize = 100 * 1024 * 1024; // 100MB limit
+        this.maxZipSize = 1024 * 1024 * 1024; // 1GB limit
     }
 
     async extractZipFiles(zipFile) {
