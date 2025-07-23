@@ -209,11 +209,32 @@ def _extract_first_page_from_html(file_content: bytes, max_chars: int) -> str:
         soup = BeautifulSoup(html_content, 'html.parser')
         
         # Get first meaningful content section
-        content_text = soup.get_text()
-        limited_text = content_text[:max_chars] if content_text else ""
+        # content_text = soup.body.get_text()
+        # limited_text = content_text[:max_chars] if content_text else ""
         
+        body = soup.body
+
+        output_lines = []
+        heading_seen = False
+
+        for tag in body.children:
+            if getattr(tag, 'name', None) is None:
+                continue
+
+            if tag.name in ['h1', 'h2', 'h3', 'h4']:
+                if heading_seen:
+                    break
+                heading_seen = True
+
+            if tag.name not in ['img', 'script', 'style']:
+                text = tag.get_text(strip=True)
+                if text:
+                    output_lines.append(text)
+
+        limited_text = '\n'.join(output_lines)
+
         print(f"🌐 HTML First Section Extracted: {len(limited_text)} chars")
-        print(f"🔍 First Section Preview: {limited_text[:100]}...")
+        print(f"🔍 First Section Preview: {limited_text}...")
         
         return limited_text.strip()
         

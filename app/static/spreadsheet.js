@@ -38,7 +38,7 @@ class ZipFileProcessor {
                 
                 // Skip system files but allow nested files
                 if (filename.includes('__MACOSX/') || filename.endsWith('.DS_Store') || 
-                    filename.includes('/.') || filename.startsWith('.')) {
+                    filename.includes('/.') || filename.startsWith('.') || filename.includes('EpicDesktopIndex')) {
                     skippedFiles.push(filename);
                     continue;
                 }
@@ -498,9 +498,9 @@ class ExportManager {
             'Unique Name': row.unique_name,
             'Keywords': row.keywords,
             'ICD Code Root': row.icd_code_root,
-            'ICD Code Hierarchy': row.icd_code_hierarchy,
-            'Details - Description': row.details_description,
-            'Details - Score': row.details_score,
+            'ICD Code Hierarchy': row.icd_code_hierarchy.length < 32767 ? row.icd_code_hierarchy : row.icd_code_hierarchy.substring(0, 32764) + '...',
+            'Details - Description': row.details_description.length < 32767 ? row.details_description : row.details_description.substring(0, 32764) + '...',
+            'Details - Score': row.details_score.length < 32767 ? row.details_score : row.details_score.substring(0, 32764) + '...',
             'Language': row.language,
             'Status': row.status
         })));
@@ -521,7 +521,7 @@ class ExportManager {
             'ICD Code': code.icd_code,
             'Root Code': code.root_code,
             'Code Chapter': code.code_chapter,
-            'Enhanced Description': code.enhanced_description,
+            'Enhanced Description': code.enhanced_description.length < 32767 ? code.enhanced_description : code.enhanced_description.substring(0, 32764) + '...',
             'Confidence Score': code.confidence_score,
             'Confidence Level': code.confidence_level,
             'Document Gender': code.document_gender,
