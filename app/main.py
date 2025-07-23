@@ -242,10 +242,11 @@ async def process_spreadsheet_document(file: UploadFile = File(..., max_size=102
         # Enhanced vector search - title + first page content for better semantic matching
         first_page_content = extract_first_page_content(file_content, clean_filename)
         if first_page_content:
-            search_text = f"{title} {first_page_content}"
+            #give more weight for the title
+            search_text = f"{title} {title} {title} {title} {first_page_content}"
             logger.info(f"Using enhanced search with first page content: {len(search_text)} chars")
         else:
-            search_text = f"{title} {title}"
+            search_text = f"{title} {title} {title} {title}"
             logger.info(f"Fallback to title duplication - first page extraction failed")
         
         # For HTML: extract embedded metadata, for others: use AI
@@ -316,7 +317,7 @@ async def process_spreadsheet_document(file: UploadFile = File(..., max_size=102
         logger.info(f"Metadata generation complete - Base: {len(metadata_result.keywords)} chars, Final: {len(final_keywords)} chars, Unique terms: {len(seen_keywords)}")
         
         # Extract codes using new engine
-        coding_result = await coding_engine.extract_codes_for_spreadsheet(title, search_text)
+        coding_result = await coding_engine.extract_codes_for_spreadsheet(title, title)
         
         if not coding_result.refined_codes:
             logger.warning("No codes validated for spreadsheet processing")

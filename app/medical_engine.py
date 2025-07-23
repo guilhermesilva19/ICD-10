@@ -83,6 +83,7 @@ class MedicalCodingEngine:
             )
         
         logger.info(f"AI selected {len(selected_codes)} codes for hierarchy completion")
+        logger.info(f"Selected codes: {selected_codes}")
         
         # Stage 3: Official hierarchy completion with family focus
         refined_codes = self._complete_hierarchy_with_family_focus(selected_codes, content or title)
@@ -125,20 +126,24 @@ class MedicalCodingEngine:
                     icd_errors.append(code)
                     continue
                 
-                # Add the selected code if it's not a root code
-                if not self._is_root_code(code):
-                    all_codes.add(code)
-                    logger.debug(f"Added selected code: {code}")
-                else:
-                    logger.warning(f"Filtered out root code from selection: {code}")
-                
-                # Add ALL official descendants (recursive) within allowed families
-                descendants = self._get_all_descendants(code)
+                # Get descendants first to determine if root has children
+                descendants = self._get_nearby_descendants(code)
                 family_filtered_descendants = [
                     desc for desc in descendants 
                     if self._extract_root_family(desc) in allowed_families and not self._is_root_code(desc)
                 ]
                 
+                # Add selected code - include root codes only if they have no valid descendants
+                if not self._is_root_code(code):
+                    all_codes.add(code)
+                    logger.debug(f"Added selected code: {code}")
+                elif not family_filtered_descendants:
+                    all_codes.add(code)
+                    logger.info(f"Added orphan root code {code} (no valid descendants)")
+                else:
+                    logger.debug(f"Excluded root code {code} (has {len(family_filtered_descendants)} descendants)")
+                
+                # Add descendants
                 all_codes.update(family_filtered_descendants)
                 logger.debug(f"Added {len(family_filtered_descendants)} descendants for {code}")
                 
@@ -197,23 +202,47 @@ class MedicalCodingEngine:
         return len(code) == 3 and code.isalnum()
     
     def _get_all_descendants(self, code: str) -> List[str]:
-        """Recursively get ALL descendants of a code down to leaf nodes."""
+        """Get most relevant descendants with intelligent prioritization to prevent Excel overflow."""
+        return self._get_nearby_descendants(code, max_codes=25)
+    
+    def _get_nearby_descendants(self, code: str, max_codes: int = 25) -> List[str]:
+        """Get most relevant descendants with intelligent prioritization."""
         all_descendants = []
         
         try:
-            # Get direct children
-            children = icd_lib.get_children(code)
+            # Get direct children first (highest priority)
+            direct_children = icd_lib.get_children(code)
+            all_descendants.extend(direct_children)
+            logger.debug(f"Code {code}: {len(direct_children)} direct children")
             
-            for child in children:
-                all_descendants.append(child)
-                # Recursively get grandchildren, great-grandchildren, etc.
-                descendants = self._get_all_descendants(child)
-                all_descendants.extend(descendants)
+            # If we have room, get grandchildren from most important children
+            remaining_slots = max_codes - len(direct_children)
+            if remaining_slots > 0 and direct_children:
+                # Sort children for consistent results
+                sorted_children = sorted(direct_children)
                 
+                for child in sorted_children:
+                    if remaining_slots <= 0:
+                        break
+                    try:
+                        grandchildren = icd_lib.get_children(child)
+                        # Take only what fits in remaining slots
+                        take_count = min(len(grandchildren), remaining_slots)
+                        all_descendants.extend(grandchildren[:take_count])
+                        remaining_slots -= take_count
+                        logger.debug(f"Added {take_count} grandchildren from {child}")
+                    except Exception as e:
+                        logger.warning(f"Error getting grandchildren for {child}: {e}")
+            
+            # Safety limit to prevent any overflow
+            final_descendants = all_descendants[:max_codes]
+            logger.info(f"Smart descendants for {code}: {len(final_descendants)} codes (limit: {max_codes})")
+            
         except Exception as e:
-            logger.warning(f"Error getting descendants for {code}: {e}")
+            logger.warning(f"Error getting smart descendants for {code}: {e}")
+            return []
         
-        return all_descendants
+        return final_descendants
     
     def _create_enhanced_description(self, code: str) -> str:
         """Create enhanced description using official ICD data."""

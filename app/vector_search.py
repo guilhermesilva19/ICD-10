@@ -61,7 +61,7 @@ class VectorSearchEngine:
                         'icd_code': code,
                         'score': score,
                         'description': icd_lib.get_description(code),
-                        'rich_text': match.metadata.get('rich_text', ''),
+                        'rich_text': match.metadata.get('text', ''),  # Fixed: retrieve from 'text' key
                         'chapter': match.metadata.get('chapter', ''),
                         'section': match.metadata.get('section', '')
                     })
@@ -84,6 +84,8 @@ class VectorSearchEngine:
         logger.info(f"  Low score filtered: {low_score_filtered}")
         logger.info(f"  Invalid codes filtered: {invalid_count}")
         logger.info(f"  Valid candidates returned: {valid_count}")
+        # for candidate in validated_candidates:
+        #     logger.info(f"  Candidate: {candidate['icd_code']} - {candidate['description']}")
         
         if invalid_codes:
             logger.warning(f"Invalid codes detected: {invalid_codes[:5]}...")  # Log first 5
@@ -93,7 +95,7 @@ class VectorSearchEngine:
     def _ensure_deterministic_ordering(self, candidates: List[Dict]) -> List[Dict]:
         """Ensure consistent ordering for deterministic results across runs."""
         # Sort by score (descending) then by ICD code (ascending) for tie-breaking
-        sorted_candidates = sorted(candidates, key=lambda x: (-x['score'], x['icd_code']))
+        sorted_candidates = sorted(candidates, key=lambda x: x['icd_code'])
         
         logger.debug(f"Applied deterministic ordering to {len(candidates)} candidates")
         return sorted_candidates

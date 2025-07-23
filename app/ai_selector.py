@@ -17,7 +17,7 @@ class AICodeSelector:
     MODEL = "gpt-4o-2024-08-06"
     TEMPERATURE = 0.0
     SEED = 42
-    MAX_ROOT_FAMILIES = 2
+    MAX_ROOT_FAMILIES = 6
     PRIMARY_FAMILY_THRESHOLD = 0.8
     
     def __init__(self):
@@ -30,14 +30,14 @@ class AICodeSelector:
             logger.warning("No candidate codes provided for selection")
             return []
         
-        # Ensure deterministic candidate ordering
-        sorted_candidates = self._ensure_deterministic_ordering(candidates)
+        # Smart ordering by prefix and keyword relevance
+        ordered_candidates = self._smart_candidate_ordering(candidates, medical_text)
         
         # Format candidates for AI processing
-        formatted_candidates = self._format_candidates_for_ai(sorted_candidates)
+        formatted_candidates = self._format_candidates_for_ai(ordered_candidates)
         
         # Execute AI selection with strict parameters
-        initial_selection = await self._execute_ai_selection(medical_text, formatted_candidates)
+        initial_selection = await self._execute_ai_selection(medical_text, formatted_candidates, ordered_candidates)
         
         if not initial_selection:
             logger.warning("AI selection returned no codes")
@@ -46,18 +46,12 @@ class AICodeSelector:
         # Validate and enforce root family focus
         validated_codes = self._validate_root_family_focus(initial_selection)
         
-        # Final hierarchy validation
-        final_codes = self._validate_hierarchy_requirements(validated_codes)
         
-        logger.info(f"Code selection complete: {len(final_codes)} codes from {len(self._get_root_families(final_codes))} families")
-        return final_codes
+        logger.info(f"Code selection complete: {len(validated_codes)} codes from {len(self._get_root_families(validated_codes))} families")
+        return validated_codes
+
     
-    def _ensure_deterministic_ordering(self, candidates: List[Dict]) -> List[Dict]:
-        """Ensure consistent candidate ordering for deterministic results."""
-        # Sort by score (descending) then by code (ascending) for consistency
-        return sorted(candidates, key=lambda x: (-x['score'], x['icd_code']))
-    
-    async def _execute_ai_selection(self, medical_text: str, formatted_candidates: str) -> List[str]:
+    async def _execute_ai_selection(self, medical_text: str, formatted_candidates: str, candidates: List[Dict] = None) -> List[str]:
         """Execute AI selection with strict deterministic parameters."""
         
         prompt = CODE_SELECTION_PROMPT.format(
@@ -127,24 +121,7 @@ class AICodeSelector:
             logger.info(f"Secondary family: {secondary_family} ({secondary_count} codes)")
         
         return validated_codes
-    
-    def _validate_hierarchy_requirements(self, codes: List[str]) -> List[str]:
-        """Ensure no root codes (3-character codes) are included in final selection."""
-        
-        hierarchy_codes = []
-        filtered_root_codes = []
-        
-        for code in codes:
-            if self._is_root_code(code):
-                filtered_root_codes.append(code)
-                logger.warning(f"Filtered out root code: {code}")
-            else:
-                hierarchy_codes.append(code)
-        
-        if filtered_root_codes:
-            logger.info(f"Removed {len(filtered_root_codes)} root codes, kept {len(hierarchy_codes)} hierarchy codes")
-        
-        return hierarchy_codes
+
     
     def _analyze_root_family_distribution(self, codes: List[str]) -> Dict[str, int]:
         """Analyze distribution of codes across root families."""
@@ -166,10 +143,79 @@ class AICodeSelector:
         """Check if code is a root code (3 characters without decimal)."""
         return len(code) == 3 and code.isalnum()
     
+    def _smart_candidate_ordering(self, candidates: List[Dict], medical_text: str) -> List[Dict]:
+        """Order candidates by relevance: prefix match between title keywords and code descriptions."""
+        
+        # Clean title: case insensitive, remove punctuation, handle multi-word intelligently
+        title_clean = medical_text.lower().strip()
+        title_clean = title_clean.replace(',', '').replace('.', '').replace('-', ' ')
+        
+        # Extract main medical term (first meaningful word if multi-word)
+        title_words = [word for word in title_clean.split() if len(word) > 3]
+        primary_term = title_words[0] if title_words else title_clean
+        
+        def calculate_relevance_score(candidate):
+            code = candidate['icd_code']
+            description = candidate['description'].lower()
+            
+            # Calculate prefix matches using primary medical term
+            prefix_score = 0
+            if len(primary_term) >= 4:
+                # Use first 4-6 characters for intelligent prefix matching
+                prefix = primary_term[:6] if len(primary_term) >= 6 else primary_term[:4]
+                # Check if description STARTS with same prefix (highest priority)
+                if description.startswith(prefix):
+                    prefix_score += 5  # Highest weight for same starting prefix
+                elif prefix in description:
+                    prefix_score += 2  # Lower weight for prefix found anywhere
+            
+            # Calculate exact matches (case insensitive)
+            keyword_score = 0
+            if primary_term in description:
+                keyword_score += 3  # Exact primary term match
+            if len(title_words) > 1:
+                # Multi-word titles: bonus for additional word matches
+                additional_matches = sum(1 for word in title_words[1:] if word in description)
+                keyword_score += additional_matches
+            
+            # Return tuple for sorting (higher scores first, then alphabetical)
+            return (-prefix_score, -keyword_score, code)
+        
+        sorted_candidates = sorted(candidates, key=calculate_relevance_score)
+        
+        # Log the reordering for debugging
+        if len(sorted_candidates) >= 10:
+            title_preview = medical_text.split()[0] if medical_text.split() else "Unknown"
+            logger.info(f"Smart ordering for title '{title_preview}' - Top candidates:")
+            for i, candidate in enumerate(sorted_candidates[:20]):
+                logger.info(f"  {i+1}. {candidate['icd_code']} - {candidate['description'][:50]}...")
+        
+        return sorted_candidates
+    
     def _format_candidates_for_ai(self, candidates: List[Dict]) -> str:
-        """Format candidates for AI consumption with consistent ordering."""
+        """Format candidates with rich clinical context for enhanced AI accuracy."""
         formatted_lines = []
         for candidate in candidates:
-            line = f"- {candidate['icd_code']}: {candidate['description']}"
-            formatted_lines.append(line)
+            # Build structured format with clinical context
+            parts = [f"Code: {candidate['icd_code']}"]
+            
+            # Make descriptions more appealing by replacing negative language
+            description = candidate['description']
+        
+            
+            parts.append(f"Description: {description}")
+            
+            # Add rich clinical context if available
+            if candidate.get('rich_text'):
+                parts.append(f"Clinical Context: {candidate['rich_text'][:200]}...")
+            
+            # Add classification context
+            if candidate.get('chapter'):
+                parts.append(f"Chapter: {candidate['chapter']}")
+            if candidate.get('section'):
+                parts.append(f"Section: {candidate['section']}")
+            
+            # Format as structured block
+            formatted_lines.append(" | ".join(parts))
+            
         return "\n".join(formatted_lines) 

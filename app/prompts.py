@@ -2,40 +2,66 @@
 
 # Core code selection prompt
 CODE_SELECTION_PROMPT = """
-You are an ICD-10-CM medical coding expert.
+You are an expert ICD-10-CM medical coding specialist with deep knowledge of clinical relationships and comprehensive patient education requirements.
 
-Medical Documentation (clinical topic): {medical_text}
+Medical Documentation Topic: {medical_text}
 
 Available Candidate Codes:
 {candidate_codes}
 
-Your task is to map the given clinical topic to all applicable ICD-10-CM codes for use in EHR retrieval of patient education documents. Follow the steps below precisely:
----
- STEP 1: Match the base code(s)
-- Identify the most clinically relevant base ICD-10-CM code(s) (3-character category).
-- Select only the base code(s) directly tied to the main diagnostic concept.
-- If more than one base code applies, include them only if clinically necessary.
----
-STEP 2: Select applicable subcodes
-- Expand all subcategories (4-character and above) under each base code.
-- Default: include all subcodes unless the topic is narrowly defined.
-- If the topic specifies a subtype, include only that subcategory and its descendants.
-  Examples:
-  - Topic = “abdominal pain” → Include all subcodes under R10.
-  - Topic = “diabetes with PAD” → Include only subcode E11.5 and its full codes.
----
- STEP 3: Include all full ICD-10-CM codes
-- For each subcategory, list all 5–7 character codes under it in the hierarchy.
-- Include all modifiers such as:
-  - Encounter type (initial, subsequent, sequela)
-  - Laterality
-  - Severity or anatomical detail
-- Do NOT truncate or filter. Include all full codes listed in the CDC Tabular List for each subcategory.
----
-EXCLUSION RULES:
-- Do not include root codes like E11 or R10 without extensions.
-- Do not stop at the 4-character level — always return the most specific 5–7 character codes.
----
+OBJECTIVE: Select ALL ICD-10-CM codes that would be relevant for comprehensive patient education and EHR retrieval on this medical topic. Think broadly about related conditions, variants, and educational scenarios that patients and clinicians might encounter.
+
+SELECTION PRINCIPLES:
+1. COVERAGE: Include specific conditions AND medically related categories
+2. CLINICAL RELATIONSHIPS: Conssider anatomically and physiologically related conditions  
+3. EDUCATIONAL VALUE: Include codes that enhance patient understanding and clinical decision-making
+4. DIFFERENTIAL SCOPE: Include conditions that share symptoms, treatments, or anatomical regions
+5. UNSPECIFIED VARIANTS: Always include unspecified/NOS codes alongside specific variants - they provide essential general educational content for patients and broad clinical scenarios
+6. TEMPORAL CATEGORIES: Include codes across different temporal classifications (acute, chronic, and non-temporal general categories) within the same condition family - patients often need education before temporal classification is determined
+7. FOCUSED ROOT FAMILIES: Prioritize the most relevant root code families for the primary condition, while including related codes that enhance educational value. Maintain reasonable focus without being overly restrictive
+8. PRIMARY SYSTEM FOCUS: When multiple anatomical systems are relevant, prioritize codes from the primary affected system while including key related codes
+
+EXAMPLES:
+
+Example 1:
+Topic: "Diabetes with Peripheral Arterial Disease"
+Selected Codes: E11.51, E11.52, E11.59, E10.51, E10.52, E10.59, I70.209, I70.219, I70.229, I73.9
+Reasoning: Include both Type 1 and Type 2 diabetes with circulatory complications, plus general PAD codes for comprehensive coverage.
+
+Example 2:  
+Topic: "Acute Myocardial Infarction"
+Selected Codes: I21.01, I21.02, I21.09, I21.11, I21.19, I21.21, I21.29, I21.3, I21.4, I21.9, I25.2, I20.0
+Reasoning: Include specific MI locations, subsequent MI codes, and related ischemic conditions for complete clinical picture.
+
+Example 3:
+Topic: "Pneumonia in Children" 
+Selected Codes: J18.9, J18.0, J18.1, J15.9, J15.0, J15.1, J44.0, J44.1, P23.9, P23.0
+Reasoning: Include unspecified pneumonia, bacterial variants, complications, and neonatal cases for pediatric comprehensiveness.
+
+Example 4:
+Topic: "Chronic Kidney Disease"
+Selected Codes: N18.1, N18.2, N18.3, N18.4, N18.5, N18.6, N18.9, N19, Z94.0, Z99.2  
+Reasoning: Include all CKD stages, unspecified kidney failure, transplant status, and dialysis dependence.
+
+Example 5:
+Topic: "Bronchiolitis, Pediatric-Caregiver"
+Selected Codes: J21.0, J21.1, J21.8, J21.9, J21, J40, J20.9, J20.5, J44.1, P28.89
+Reasoning: Include specific bronchiolitis codes, general bronchitis for educational context, acute bronchitis variants, and related respiratory conditions affecting children.
+
+YOUR TASK:
+Analyze the medical topic and select codes following these principles. Include:
+- Primary condition codes (specific diagnostic codes)
+- Related condition codes (broader categories and variants)
+- Unspecified/NOS versions (essential for general patient education)
+- Non-temporal general categories alongside acute and chronic variants
+- Complication codes (when applicable)
+- Anatomically related conditions
+- Codes that would appear in differential diagnosis
+
+Important: When selecting condition variants, include codes from different temporal perspectives - patients may present before clinical classification as acute/chronic is determined, requiring general educational content alongside specific variants.
+Prioritize relevant root code families while being inclusive of educational value. Include related codes that provide comprehensive patient education coverage.
+
+Return ALL relevant codes that would provide comprehensive clinical and educational value for this medical topic.
 """
 
 # Core metadata generation prompt (Step 1)
