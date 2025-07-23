@@ -12,4 +12,3 @@ pandas
 tqdm
 httpx
 simple-icd-10-cm
-beautifulsoup4

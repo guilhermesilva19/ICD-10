@@ -8,6 +8,7 @@ from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from typing import Dict, Any, List
+from bs4 import BeautifulSoup
 
 from .models import SpreadsheetRow, RefinedCodeValidation
 from .document_reader import extract_title_from_file, extract_text_from_file, extract_first_page_content
@@ -328,6 +329,26 @@ async def process_spreadsheet_document(file: UploadFile = File(..., max_size=102
         code_scores = format_confidence_scores(coding_result.refined_codes)
         structured_codes = format_structured_codes(coding_result.refined_codes)
         
+        # Generate unique name - match client spreadsheet pattern
+#         file_extension = clean_filename.lower().split('.')[-1]
+#         gender = ""
+#         if file_extension in ['html', 'htm']:
+#             # Try different encodings
+#             for encoding in ['utf-8', 'latin-1', 'cp1252']:
+#                 try:
+#                     html_content = file_content.decode(encoding)
+#                     break
+#                 except UnicodeDecodeError:
+#                     continue
+            
+#             soup = BeautifulSoup(html_content, 'html.parser')
+#             meta_tag = soup.find('meta', attrs={'name': 'Unique'})
+#             unique_name = meta_tag['content'] if meta_tag and 'content' in meta_tag.attrs else None
+#             meta_tag = soup.find('meta', attrs={'name': 'Gender'})
+#             gender = meta_tag['content'] if meta_tag and 'content' in meta_tag.attrs else ""
+#         else:
+#             unique_name = title.replace(" ", "_").replace(",", "_").replace("(", "").replace(")", "")
+
         logger.info(f"Spreadsheet processing complete - {len(coding_result.refined_codes)} codes generated")
         logger.info(f"Using metadata - Gender: {gender}, Unique Name: {unique_name}")
         
