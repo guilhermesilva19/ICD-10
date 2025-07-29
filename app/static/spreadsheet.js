@@ -461,6 +461,10 @@ class ExportManager {
             if (row.icd_codes_structured && row.icd_codes_structured.length > 0) {
                 // Use structured data (perfect quality)
                 row.icd_codes_structured.forEach(code => {
+                    // Use improved confidence if available, otherwise fall back to legacy
+                    const confidenceScore = code.improved_confidence_percentage || code.confidence_percentage;
+                    const confidenceNumeric = code.improved_confidence_score ? Math.round(code.improved_confidence_score * 100) : Math.round(code.confidence_score * 100);
+                    
                     allCodes.push({
                         document_path: row.filepath,
                         document_title: row.title,
@@ -470,9 +474,13 @@ class ExportManager {
                         root_code: code.root_code,
                         code_chapter: ExportManager.getICDChapter(code.root_code),
                         enhanced_description: code.enhanced_description,
-                        confidence_score: code.confidence_percentage,
-                        confidence_numeric: Math.round(code.confidence_score * 100),
-                        confidence_level: ExportManager.getConfidenceLevel(Math.round(code.confidence_score * 100)),
+                        confidence_score: confidenceScore,
+                        confidence_numeric: confidenceNumeric,
+                        confidence_level: ExportManager.getConfidenceLevel(confidenceNumeric),
+                        legacy_confidence_score: code.confidence_percentage,
+                        legacy_confidence_numeric: Math.round(code.confidence_score * 100),
+                        improved_confidence_score: code.improved_confidence_percentage,
+                        improved_confidence_numeric: code.improved_confidence_score ? Math.round(code.improved_confidence_score * 100) : null,
                         document_language: row.language,
                         document_status: row.status
                     });
@@ -522,8 +530,12 @@ class ExportManager {
             'Root Code': code.root_code,
             'Code Chapter': code.code_chapter,
             'Enhanced Description': code.enhanced_description.length < 32767 ? code.enhanced_description : code.enhanced_description.substring(0, 32764) + '...',
-            'Confidence Score': code.confidence_score,
-            'Confidence Level': code.confidence_level,
+            'Legacy Confidence Score': code.legacy_confidence_score,
+            'Legacy Confidence Level': ExportManager.getConfidenceLevel(code.legacy_confidence_numeric),
+            'Improved Confidence Score': code.improved_confidence_score || 'N/A',
+            'Improved Confidence Level': code.improved_confidence_numeric ? ExportManager.getConfidenceLevel(code.improved_confidence_numeric) : 'N/A',
+            'Current Confidence Score': code.confidence_score,
+            'Current Confidence Level': code.confidence_level,
             'Document Gender': code.document_gender,
             'Document Keywords': code.document_keywords ? code.document_keywords.substring(0, 100) + '...' : '',
             'Language': code.document_language,
@@ -533,7 +545,8 @@ class ExportManager {
         // Details sheet column widths
         detailsSheet['!cols'] = [
             { wch: 30 }, { wch: 25 }, { wch: 10 }, { wch: 8 }, { wch: 18 },
-            { wch: 45 }, { wch: 12 }, { wch: 12 }, { wch: 8 }, { wch: 30 }, { wch: 10 }, { wch: 10 }
+            { wch: 45 }, { wch: 12 }, { wch: 12 }, { wch: 12 }, { wch: 12 }, { wch: 12 }, { wch: 12 },
+            { wch: 8 }, { wch: 30 }, { wch: 10 }, { wch: 10 }
         ];
         
         // 🌈 CONFIDENCE-BASED COLOR CODING

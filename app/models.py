@@ -19,7 +19,8 @@ class RefinedCodeValidation(BaseModel):
     icd_code: str = Field(description="The ICD-10-CM code")
     original_description: str = Field(description="Original official code description")
     enhanced_description: str = Field(description="AI-enhanced, clinically clear description")
-    confidence_score: float = Field(description="Clinical confidence score from 0.0 to 1.0")
+    confidence_score: float = Field(description="Legacy confidence score from 0.0 to 1.0")
+    improved_confidence_score: Optional[float] = Field(default=None, description="Improved multi-factor confidence score from 0.0 to 1.0")
 
 
 class ClinicalRefinementResponse(BaseModel):
