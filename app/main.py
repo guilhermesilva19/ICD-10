@@ -187,11 +187,13 @@ async def analyze_document(file: UploadFile = File(..., max_size=1024 * 1024 * 1
         
         code_details = []
         for code in coding_result.refined_codes:
-            confidence_pct = int(code.confidence_score * 100)
+            legacy_confidence_pct = int(code.confidence_score * 100)
+            improved_confidence_pct = int(code.improved_confidence_score * 100) if code.improved_confidence_score else legacy_confidence_pct
             code_details.append({
                 "code": code.icd_code,
                 "enhanced_description": code.enhanced_description,
-                "confidence": f"{confidence_pct}%"
+                "confidence": f"{legacy_confidence_pct}%",
+                "improved_confidence": f"{improved_confidence_pct}%"
             })
         
         logger.info(f"Analysis complete - {len(diagnosis_codes)} codes generated")
@@ -404,24 +406,30 @@ def format_enhanced_descriptions(codes: List[RefinedCodeValidation]) -> str:
     return ", ".join(descriptions)
 
 def format_confidence_scores(codes: List[RefinedCodeValidation]) -> str:
-    """Format confidence scores as 'CODE: XX%'"""
+    """Format confidence scores as 'CODE: XX% (Legacy) / YY% (Improved)'"""
     scores = []
     for code in codes:
-        percentage = int(code.confidence_score * 100)
-        scores.append(f"{code.icd_code}: {percentage}%")
+        legacy_percentage = int(code.confidence_score * 100)
+        improved_percentage = int(code.improved_confidence_score * 100) if code.improved_confidence_score else legacy_percentage
+        scores.append(f"{code.icd_code}: {legacy_percentage}% (Legacy) / {improved_percentage}% (Improved)")
     return ", ".join(scores)
 
 def format_structured_codes(codes: List[RefinedCodeValidation]) -> List[Dict[str, Any]]:
     """Format codes as structured data for enhanced export capabilities"""
     structured_codes = []
     for code in codes:
+        legacy_confidence_pct = int(code.confidence_score * 100)
+        improved_confidence_pct = int(code.improved_confidence_score * 100) if code.improved_confidence_score else legacy_confidence_pct
+        
         structured_codes.append({
             "icd_code": code.icd_code,
             "root_code": code.icd_code[:3] if len(code.icd_code) >= 3 else code.icd_code,
             "enhanced_description": code.enhanced_description,
             "original_description": code.original_description,
             "confidence_score": code.confidence_score,
-            "confidence_percentage": f"{int(code.confidence_score * 100)}%"
+            "confidence_percentage": f"{int(code.confidence_score * 100)}%",
+            "improved_confidence_score": code.improved_confidence_score,
+            "improved_confidence_percentage": f"{improved_confidence_pct}%"
         })
     return structured_codes
 

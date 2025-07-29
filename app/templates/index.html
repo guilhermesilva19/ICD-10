@@ -137,6 +137,43 @@
             background: linear-gradient(135deg, var(--danger-color), #dc2626); 
         }
         
+        .confidence-scores {
+            display: flex;
+            gap: 10px;
+            margin: 10px 0;
+            flex-wrap: wrap;
+        }
+        
+        .confidence-scores .score {
+            margin-left: 0;
+            font-size: 12px;
+            padding: 4px 8px;
+        }
+        
+        .confidence-scores .score.legacy {
+            background: linear-gradient(135deg, #6b7280, #4b5563);
+            border: 1px solid #374151;
+        }
+        
+        .confidence-scores .score.improved {
+            background: linear-gradient(135deg, #3b82f6, #2563eb);
+            border: 1px solid #1d4ed8;
+        }
+        
+        .confidence-comparison-header {
+            background: linear-gradient(135deg, #f0f9ff, #e0f2fe);
+            border-radius: 8px;
+            padding: 12px;
+            margin-bottom: 20px;
+            border-left: 4px solid #3b82f6;
+        }
+        
+        .confidence-comparison-header p {
+            margin: 0;
+            color: #1e40af;
+            font-weight: 600;
+        }
+        
         .header {
             text-align: center;
             margin-bottom: 40px;
