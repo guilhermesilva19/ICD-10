@@ -4,6 +4,7 @@ __pycache__
 .vscode/
 raw_data/
 raw-data/
+
 .env
 .env.local
 .env.development.local

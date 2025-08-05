@@ -56,22 +56,11 @@ function displayResults(data) {
     // Enhanced Code Details
     if (data.code_details && data.code_details.length > 0) {
         html += '<h3>✅ Detailed Code Analysis</h3>';
-        html += '<div class="confidence-comparison-header">';
-        html += '<p><strong>📊 Confidence Score Comparison:</strong> Legacy (Original) vs Improved (Multi-factor)</p>';
-        html += '</div>';
         data.code_details.forEach(code => {
-            const legacyConfidenceNum = parseInt(code.confidence.replace('%', ''));
-            const improvedConfidenceNum = parseInt(code.improved_confidence.replace('%', ''));
-            
-            // Use improved confidence for styling if available
-            const displayConfidenceNum = code.improved_confidence ? improvedConfidenceNum : legacyConfidenceNum;
-            
-            html += `<div class="code ${getConfidenceClass(displayConfidenceNum)}">
+            const confidenceNum = parseInt(code.confidence.replace('%', ''));
+            html += `<div class="code ${getConfidenceClass(confidenceNum)}">
                 <h4>🏥 ${code.code}</h4>
-                <div class="confidence-scores">
-                    <div class="score legacy ${getScoreClass(legacyConfidenceNum)}">Legacy: ${code.confidence}</div>
-                    <div class="score improved ${getScoreClass(improvedConfidenceNum)}">Improved: ${code.improved_confidence}</div>
-                </div>
+                <div class="score ${getScoreClass(confidenceNum)}">${code.confidence}</div>
                 <p><strong>Description:</strong> ${code.enhanced_description}</p>
             </div>`;
         });

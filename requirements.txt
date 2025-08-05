@@ -1,7 +1,7 @@
 fastapi
 uvicorn
-openai
-pinecone
+openai>=1.0.0
+pinecone>=3.0.0
 python-dotenv
 jinja2
 python-multipart
@@ -11,4 +11,3 @@ lxml
 pandas
 tqdm
 httpx
-simple-icd-10-cm

@@ -1,308 +1,490 @@
-<!DOCTYPE html>
-<html>
-<head>
-    <title>AI Medical Coding System</title>
-    <style>
-        :root {
-            --primary-color: #3b82f6;
-            --primary-dark: #1e40af;
-            --success-color: #10b981;
-            --warning-color: #f59e0b;
-            --danger-color: #ef4444;
-            --gray-50: #f9fafb;
-            --gray-100: #f3f4f6;
-            --gray-200: #e5e7eb;
-            --gray-600: #4b5563;
-            --gray-700: #374151;
-            --gray-800: #1f2937;
-        }
+{% extends "base.html" %}
 
-        body { 
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
-            max-width: 900px; 
-            margin: 0 auto; 
-            padding: 20px; 
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-            line-height: 1.6;
-        }
-        
-        .container { 
-            background: #ffffff; 
-            padding: 40px; 
-            border-radius: 20px; 
-            margin: 20px 0; 
-            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
-            backdrop-filter: blur(16px);
-        }
-        
-        .upload-box { 
-            border: 2px dashed var(--primary-color); 
-            padding: 50px; 
-            text-align: center; 
-            border-radius: 15px; 
-            margin: 30px 0; 
-            background: linear-gradient(135deg, #f0f9ff, #e0f2fe);
-            transition: all 0.3s ease;
-        }
-        
-        .upload-box:hover {
-            border-color: var(--primary-dark);
-            background: linear-gradient(135deg, #e0f2fe, #f0f9ff);
-            transform: translateY(-2px);
-        }
-        
-        .btn { 
-            background: linear-gradient(135deg, var(--primary-color), var(--primary-dark)); 
-            color: white; 
-            padding: 15px 30px; 
-            border: none; 
-            border-radius: 12px; 
-            cursor: pointer; 
-            font-size: 16px; 
-            font-weight: 600;
-            transition: all 0.3s ease;
-            text-decoration: none;
-            display: inline-block;
-        }
-        
-        .btn:hover { 
-            background: linear-gradient(135deg, var(--primary-dark), #1e3a8a);
-            transform: translateY(-2px);
-            box-shadow: 0 10px 25px -5px rgba(59, 130, 246, 0.4);
-        }
-        
-        .result-box { 
-            background: white; 
-            padding: 25px; 
-            border-radius: 12px; 
-            margin: 20px 0; 
-            border-left: 4px solid var(--primary-color); 
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-        }
-        
-        .chapter { 
-            background: linear-gradient(135deg, #e0f2fe, #f0f9ff); 
-            padding: 20px; 
-            margin: 15px 0; 
-            border-radius: 12px; 
-            border-left: 4px solid var(--primary-color);
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-        }
-        
-        .code { 
-            background: var(--gray-50); 
-            padding: 20px; 
-            margin: 15px 0; 
-            border-radius: 12px; 
-            border-left: 4px solid var(--success-color); 
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-            position: relative;
-        }
-        
-        .high-confidence { 
-            border-left-color: var(--success-color);
-            background: linear-gradient(135deg, #f0fdf4, #ecfdf5);
-        }
-        
-        .medium-confidence { 
-            border-left-color: var(--warning-color);
-            background: linear-gradient(135deg, #fffbeb, #fef3c7);
-        }
-        
-        .low-confidence { 
-            border-left-color: var(--danger-color);
-            background: linear-gradient(135deg, #fef2f2, #fee2e2);
-        }
-        
-        .score { 
-            font-weight: 700; 
-            padding: 6px 12px; 
-            border-radius: 8px; 
-            color: white; 
-            font-size: 14px;
-            display: inline-block;
-            margin-left: 10px;
-        }
-        
-        .score.high { 
-            background: linear-gradient(135deg, var(--success-color), #059669); 
-        }
-        
-        .score.medium { 
-            background: linear-gradient(135deg, var(--warning-color), #d97706); 
-        }
-        
-        .score.low { 
-            background: linear-gradient(135deg, var(--danger-color), #dc2626); 
-        }
-        
-        .confidence-scores {
-            display: flex;
-            gap: 10px;
-            margin: 10px 0;
-            flex-wrap: wrap;
-        }
-        
-        .confidence-scores .score {
-            margin-left: 0;
-            font-size: 12px;
-            padding: 4px 8px;
-        }
-        
-        .confidence-scores .score.legacy {
-            background: linear-gradient(135deg, #6b7280, #4b5563);
-            border: 1px solid #374151;
-        }
-        
-        .confidence-scores .score.improved {
-            background: linear-gradient(135deg, #3b82f6, #2563eb);
-            border: 1px solid #1d4ed8;
-        }
-        
-        .confidence-comparison-header {
-            background: linear-gradient(135deg, #f0f9ff, #e0f2fe);
-            border-radius: 8px;
-            padding: 12px;
-            margin-bottom: 20px;
-            border-left: 4px solid #3b82f6;
-        }
-        
-        .confidence-comparison-header p {
-            margin: 0;
-            color: #1e40af;
-            font-weight: 600;
-        }
-        
-        .header {
-            text-align: center;
-            margin-bottom: 40px;
-            color: white;
-        }
-        
-        .header h1 {
-            color: white;
-            margin-bottom: 15px;
-            font-size: 3rem;
-            font-weight: 700;
-            text-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-        }
-        
-        .header p {
-            font-size: 1.2rem;
-            opacity: 0.9;
-            margin-bottom: 30px;
-        }
-        
-        .loading {
-            text-align: center;
-            margin: 30px;
-            padding: 30px;
-            background: linear-gradient(135deg, #fff3cd, #fef3c7);
-            border-radius: 15px;
-            border-left: 4px solid var(--warning-color);
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-        }
-        
-        .file-input {
-            margin: 25px 0;
-        }
-        
-        .file-input input[type="file"] {
-            padding: 15px;
-            border: 2px solid var(--gray-200);
-            border-radius: 10px;
-            width: 100%;
-            background: white;
-            font-size: 16px;
-            transition: border-color 0.3s ease;
-        }
-        
-        .file-input input[type="file"]:focus {
-            border-color: var(--primary-color);
-            outline: none;
-            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
-        }
+{% block title %}AI Medical Coding System{% endblock %}
 
-        .nav-buttons {
-            margin-top: 20px; 
-            display: flex; 
-            gap: 15px; 
-            justify-content: center; 
-            flex-wrap: wrap;
-        }
+{% block extra_css %}
+<style>
+    :root {
+        --primary-color: #3b82f6;
+        --primary-dark: #1e40af;
+        --success-color: #10b981;
+        --warning-color: #f59e0b;
+        --danger-color: #ef4444;
+        --gray-50: #f9fafb;
+        --gray-100: #f3f4f6;
+        --gray-200: #e5e7eb;
+        --gray-600: #4b5563;
+        --gray-700: #374151;
+        --gray-800: #1f2937;
+    }
 
-        .nav-buttons .btn {
-            min-width: 180px;
-        }
+    .header {
+        text-align: center;
+        margin-bottom: 2rem;
+        padding: 2rem 1rem;
+        background: linear-gradient(135deg, #f0f9ff, #e0f2fe);
+        border-radius: 10px;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+    }
 
-        /* Enhanced animations */
-        @keyframes fadeInUp {
-            from {
-                opacity: 0;
-                transform: translateY(30px);
-            }
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
-        }
+    .header h1 {
+        color: var(--gray-800);
+        margin-bottom: 0.5rem;
+        font-size: 2.25rem;
+        font-weight: 800;
+    }
 
-        .container {
-            animation: fadeInUp 0.6s ease;
-        }
+    .header p {
+        color: var(--gray-600);
+        font-size: 1.125rem;
+        max-width: 800px;
+        margin: 0 auto;
+    }
 
-        /* Code details styling */
-        .code h4 {
-            color: var(--gray-800);
-            margin-bottom: 10px;
-            font-size: 1.2rem;
-        }
+    .upload-container {
+        background: white;
+        border-radius: 10px;
+        padding: 2rem;
+        box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+        margin-bottom: 2rem;
+    }
 
-        .code p {
-            color: var(--gray-700);
-            margin: 8px 0;
-        }
-    </style>
-</head>
-<body>
-    <div class="header">
-        <h1>🏥 AI Medical Coding System</h1>
-        <p>Advanced AI-powered medical document analysis with two-step validation for precise ICD-10-CM coding</p>
-        
-        <!-- Navigation -->
-        <div class="nav-buttons">
-            <a href="/" class="btn" style="background: linear-gradient(135deg, #6c757d, #495057);">
-                📄 Single Document
-            </a>
-            <a href="/spreadsheet" class="btn" style="background: linear-gradient(135deg, var(--success-color), #059669);">
-                📊 Bulk Processing
-            </a>
+    .upload-area {
+        border: 2px dashed var(--gray-200);
+        border-radius: 8px;
+        padding: 3rem 2rem;
+        text-align: center;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        background-color: var(--gray-50);
+        margin-bottom: 1.5rem;
+    }
+
+    .upload-area:hover {
+        border-color: var(--primary-color);
+        background-color: rgba(59, 130, 246, 0.05);
+    }
+
+    .upload-area i {
+        font-size: 3rem;
+        color: var(--primary-color);
+        margin-bottom: 1rem;
+    }
+
+    .upload-area h3 {
+        color: var(--gray-800);
+        margin-bottom: 0.5rem;
+    }
+
+    .upload-area p {
+        color: var(--gray-600);
+        margin-bottom: 1.5rem;
+    }
+
+    .btn {
+        padding: 0.75rem 1.5rem;
+        font-weight: 600;
+        border-radius: 8px;
+        transition: all 0.2s;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+    }
+
+    .btn-primary {
+        background-color: var(--primary-color);
+        border: none;
+    }
+
+    .btn-primary:hover {
+        background-color: var(--primary-dark);
+        transform: translateY(-2px);
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+    }
+
+    .result-container {
+        margin-top: 2rem;
+        display: none;
+    }
+
+    .result-card {
+        background: white;
+        border-radius: 10px;
+        padding: 2rem;
+        margin-bottom: 2rem;
+        box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+    }
+
+    .result-card h3 {
+        color: var(--gray-800);
+        margin-bottom: 1.5rem;
+        padding-bottom: 1rem;
+        border-bottom: 1px solid var(--gray-200);
+    }
+
+    .code-item {
+        background: var(--gray-50);
+        border-radius: 6px;
+        padding: 1rem;
+        margin-bottom: 1rem;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    .code-item .code {
+        font-family: 'Courier New', monospace;
+        font-weight: 600;
+        color: var(--gray-800);
+    }
+
+    .code-item .description {
+        color: var(--gray-600);
+        flex-grow: 1;
+        margin: 0 1rem;
+    }
+
+    .confidence {
+        padding: 0.25rem 0.75rem;
+        border-radius: 9999px;
+        font-size: 0.875rem;
+        font-weight: 600;
+    }
+
+    .confidence-high {
+        background-color: #dcfce7;
+        color: #166534;
+    }
+
+    .confidence-medium {
+        background-color: #fef9c3;
+        color: #854d0e;
+    }
+
+    .confidence-low {
+        background-color: #fee2e2;
+        color: #991b1b;
+    }
+
+    .loading {
+        text-align: center;
+        margin: 30px;
+        padding: 30px;
+        background: linear-gradient(135deg, #fff3cd, #fef3c7);
+        border-radius: 10px;
+        color: #854d0e;
+    }
+
+    .spinner {
+        width: 3rem;
+        height: 3rem;
+        margin: 0 auto 1rem;
+        border: 0.25rem solid rgba(0, 0, 0, 0.1);
+        border-left-color: #f59e0b;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+    }
+
+    @keyframes spin {
+        to { transform: rotate(360deg); }
+    }
+
+    .file-info {
+        background: white;
+        border-radius: 8px;
+        padding: 1.5rem;
+        margin-bottom: 1.5rem;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+    }
+
+    .file-info h4 {
+        color: var(--gray-800);
+        margin-bottom: 1rem;
+    }
+
+    .file-info p {
+        color: var(--gray-600);
+        margin-bottom: 0.5rem;
+    }
+
+    .file-info .file-name {
+        font-weight: 600;
+        color: var(--primary-dark);
+    }
+
+    .alert {
+        border-radius: 8px;
+        padding: 1rem;
+        margin-bottom: 1.5rem;
+        border: 1px solid transparent;
+    }
+
+    .alert-info {
+        background-color: #dbeafe;
+        border-color: #bfdbfe;
+        color: #1e40af;
+    }
+
+    .alert-success {
+        background-color: #dcfce7;
+        border-color: #bbf7d0;
+        color: #166534;
+    }
+
+    .alert-warning {
+        background-color: #fef3c7;
+        border-color: #fde68a;
+        color: #92400e;
+    }
+
+    .alert-danger {
+        background-color: #fee2e2;
+        border-color: #fecaca;
+        color: #991b1b;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="header">
+    <h1>🏥 AI Medical Coding System</h1>
+    <p>Advanced AI-powered medical document analysis with two-step validation for precise ICD-10-CM coding</p>
+</div>
+
+<div class="container">
+    <div class="upload-container">
+        <div class="alert alert-info">
+            <i class="fas fa-info-circle me-2"></i>
+            Upload a medical document to automatically extract and validate ICD-10-CM codes with AI assistance.
         </div>
-    </div>
-    
-    <div class="container">
-        <h2>📄 Upload Medical Document</h2>
-        <form id="uploadForm" enctype="multipart/form-data">
-            <div class="upload-box">
-                <p style="font-size: 1.2rem; font-weight: 600; margin-bottom: 20px;">📁 Choose a medical document</p>
-                <div class="file-input">
-                    <input type="file" id="fileInput" name="file" accept=".txt,.pdf,.doc,.docx,.html,.htm" required>
-                </div>
-                <p><small style="color: var(--gray-600);">Supported formats: TXT, PDF, DOC, DOCX, HTML, HTM</small></p>
-                <button type="submit" class="btn">🔍 Analyze & Generate Codes</button>
+
+        <div class="upload-area" id="dropZone">
+            <i class="fas fa-file-medical"></i>
+            <h3>Drag & Drop your document here</h3>
+            <p>or click to browse files (PDF, DOCX, DOC, TXT, HTML)</p>
+            <button class="btn btn-primary" id="browseBtn">
+                <i class="fas fa-upload me-2"></i> Select File
+            </button>
+            <input type="file" id="fileInput" class="d-none" accept=".pdf,.doc,.docx,.txt,.html">
+        </div>
+
+        <div class="loading" id="loadingIndicator" style="display: none;">
+            <div class="spinner"></div>
+            <h4>Analyzing Document</h4>
+            <p>Our AI is processing your document to extract and validate medical codes. This may take a moment...</p>
+        </div>
+
+        <div id="fileInfo" class="file-info" style="display: none;">
+            <h4>Document Information</h4>
+            <p><strong>File Name:</strong> <span id="fileName" class="file-name"></span></p>
+            <p><strong>File Type:</strong> <span id="fileType"></span></p>
+            <p><strong>File Size:</strong> <span id="fileSize"></span></p>
+        </div>
+
+        <div class="result-container" id="resultContainer">
+            <div class="result-card">
+                <h3><i class="fas fa-stethoscope me-2"></i>Extracted Medical Codes</h3>
+                <div id="codeResults"></div>
             </div>
-        </form>
-    </div>
-    
-    <div id="loading" style="display: none;">
-        <div class="loading">
-            <p style="font-size: 1.1rem; font-weight: 600;">🤖 AI is analyzing your document with two-step validation... This may take a few moments.</p>
+
+            <div class="result-card" id="summaryCard" style="display: none;">
+                <h3><i class="fas fa-file-medical-alt me-2"></i>Clinical Summary</h3>
+                <div id="clinicalSummary"></div>
+            </div>
         </div>
     </div>
-    
-    <div id="results"></div>
-    
-    <script src="/static/app.js"></script>
-</body>
-</html> 
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const dropZone = document.getElementById('dropZone');
+        const fileInput = document.getElementById('fileInput');
+        const browseBtn = document.getElementById('browseBtn');
+        const loadingIndicator = document.getElementById('loadingIndicator');
+        const resultContainer = document.getElementById('resultContainer');
+        const fileInfo = document.getElementById('fileInfo');
+        const fileName = document.getElementById('fileName');
+        const fileType = document.getElementById('fileType');
+        const fileSize = document.getElementById('fileSize');
+        const codeResults = document.getElementById('codeResults');
+        const summaryCard = document.getElementById('summaryCard');
+        const clinicalSummary = document.getElementById('clinicalSummary');
+
+        // Handle drag and drop
+        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+            dropZone.addEventListener(eventName, preventDefaults, false);
+        });
+
+        function preventDefaults(e) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+
+        ['dragenter', 'dragover'].forEach(eventName => {
+            dropZone.addEventListener(eventName, highlight, false);
+        });
+
+        ['dragleave', 'drop'].forEach(eventName => {
+            dropZone.addEventListener(eventName, unhighlight, false);
+        });
+
+        function highlight() {
+            dropZone.style.borderColor = '#3b82f6';
+            dropZone.style.backgroundColor = 'rgba(59, 130, 246, 0.1)';
+        }
+
+        function unhighlight() {
+            dropZone.style.borderColor = '#e5e7eb';
+            dropZone.style.backgroundColor = '#f9fafb';
+        }
+
+        // Handle dropped files
+        dropZone.addEventListener('drop', handleDrop, false);
+
+        function handleDrop(e) {
+            const dt = e.dataTransfer;
+            const files = dt.files;
+            handleFiles(files);
+        }
+
+        // Handle file input change
+        browseBtn.addEventListener('click', () => fileInput.click());
+        fileInput.addEventListener('change', function() {
+            if (this.files.length) {
+                handleFiles(this.files);
+            }
+        });
+
+        // Process files
+        function handleFiles(files) {
+            if (files.length === 0) return;
+            
+            const file = files[0];
+            if (!isValidFileType(file)) {
+                alert('Please upload a valid file type (PDF, Word, or Text)');
+                return;
+            }
+            
+            // Show file info
+            showFileInfo(file);
+            
+            // Show loading indicator
+            loadingIndicator.style.display = 'block';
+            resultContainer.style.display = 'none';
+            
+            // Process the file
+            processFile(file);
+        }
+
+        // Validate file type
+        function isValidFileType(file) {
+            const validTypes = [
+                'application/pdf',
+                'application/msword',
+                'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                'text/plain',
+                'text/html'
+            ];
+            return validTypes.includes(file.type) || 
+                   file.name.endsWith('.pdf') || 
+                   file.name.endsWith('.doc') || 
+                   file.name.endsWith('.docx') || 
+                   file.name.endsWith('.txt') ||
+                   file.name.endsWith('.html');
+        }
+
+        // Show file information
+        function showFileInfo(file) {
+            fileName.textContent = file.name;
+            fileType.textContent = file.type || 'Unknown';
+            fileSize.textContent = formatFileSize(file.size);
+            fileInfo.style.display = 'block';
+        }
+
+        // Format file size
+        function formatFileSize(bytes) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+
+        // Process the uploaded file
+        async function processFile(file) {
+            const formData = new FormData();
+            formData.append('file', file);
+            
+            try {
+                // Call the API to analyze the document
+                const response = await fetch('/api/analyze', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`Error: ${response.status} - ${response.statusText}`);
+                }
+                
+                const result = await response.json();
+                
+                // Display results
+                displayResults(result);
+                
+            } catch (error) {
+                console.error('Error processing file:', error);
+                alert('An error occurred while processing the file. Please try again.');
+            } finally {
+                loadingIndicator.style.display = 'none';
+                resultContainer.style.display = 'block';
+            }
+        }
+
+        // Display the results
+        function displayResults(result) {
+            codeResults.innerHTML = '';
+            
+            if (!result.icd_codes || !result.icd_codes.structured_codes || result.icd_codes.structured_codes.length === 0) {
+                codeResults.innerHTML = '<div class="alert alert-warning">No ICD-10 codes found in the document.</div>';
+                return;
+            }
+            
+            // Sort codes by confidence (High to Low)
+            const sortedCodes = [...result.icd_codes.structured_codes].sort((a, b) => b.confidence - a.confidence);
+            
+            // Add each code to the results
+            sortedCodes.forEach(code => {
+                const codeItem = document.createElement('div');
+                codeItem.className = 'code-item';
+                
+                // Determine confidence class
+                let confidenceClass = 'confidence-medium';
+                if (code.confidence >= 80) confidenceClass = 'confidence-high';
+                else if (code.confidence <= 50) confidenceClass = 'confidence-low';
+                
+                codeItem.innerHTML = `
+                    <div class="code">${code.code}</div>
+                    <div class="description">${code.description}</div>
+                    <div class="confidence ${confidenceClass}">
+                        ${code.confidence}% Confidence
+                    </div>
+                `;
+                
+                codeResults.appendChild(codeItem);
+            });
+            
+            // Show clinical summary if available
+            if (result.clinical_summary) {
+                clinicalSummary.innerHTML = `<p>${result.clinical_summary}</p>`;
+                summaryCard.style.display = 'block';
+            } else {
+                summaryCard.style.display = 'none';
+            }
+            
+            // Show the results
+            resultContainer.style.display = 'block';
+        }
+    });
+</script>
+{% endblock %}
